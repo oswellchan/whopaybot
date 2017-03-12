@@ -14,10 +14,3 @@ if __name__ == '__main__':
     )
     bot = TelegramBot(settings.TOKEN, db)
     bot.start_bot()
-
-    # updater = Updater(token=settings.TOKEN)
-    # dispatcher = updater.dispatcher
-    # start_handler = CommandHandler('start', start)
-    # dispatcher.add_handler(start_handler)
-
-    # updater.start_polling()

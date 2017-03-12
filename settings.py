@@ -2,7 +2,7 @@ from os import path, environ
 from dotenv import load_dotenv
 
 
-class EnvSettings():
+class EnvSettings:
     def __init__(self):
         dotenv_path = path.join(path.dirname(__file__), '.env')
         load_dotenv(dotenv_path)
