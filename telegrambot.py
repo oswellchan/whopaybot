@@ -1,14 +1,21 @@
-from telegram.ext import Updater, Filters, CommandHandler, MessageHandler
+from telegram.ext import Updater, Filters, CommandHandler, MessageHandler, CallbackQueryHandler
+from telegram.inlinekeyboardmarkup import InlineKeyboardMarkup
+from telegram.inlinekeyboardbutton import InlineKeyboardButton
 from database import Transaction
+import json
 import traceback
 
 
 PRIVATE_CHAT = 'private'
 ACTION_NEWBILL_SET_NAME = 0
+ACTION_ADD_NEW_ITEM = 1
+ACTION_EDIT_ITEM = 2
+ACTION_CREATE_BILL_DONE = 3
 REQUEST_BILL_NAME = "Send me a name for the new bill you want to create."
 ERROR_INVALID_BILL_NAME = "Sorry, the bill name provided is invalid. Name of the bill can only be 250 characters long."
 ERROR_SOMETHING_WENT_WRONG = "Sorry, an error has occurred. Please try again in a few moments."
-
+JSON_ACTION_FIELD = 'a'
+JSON_BILL_FIELD = 'b'
 
 class TelegramBot:
     def __init__(self, token, db):
@@ -26,8 +33,12 @@ class TelegramBot:
         newbill_handler = CommandHandler('newbill', self.new_bill)
         dispatcher.add_handler(newbill_handler)
 
+        # Handle callback queries
+        callback_handler = CallbackQueryHandler(self.handle_all_callback)
+        dispatcher.add_handler(callback_handler)
+
         # Handle all replies
-        message_handler = MessageHandler(Filters.all, self.handle_all)
+        message_handler = MessageHandler(Filters.all, self.handle_all_msg)
         dispatcher.add_handler(message_handler)
 
     def start(self, bot, update):
@@ -51,7 +62,7 @@ class TelegramBot:
         except Exception as e:
             traceback.print_trace()
 
-    def handle_all(self, bot, update):
+    def handle_all_msg(self, bot, update):
         try:
             if update.message.chat.type != PRIVATE_CHAT:
                 return
@@ -70,6 +81,25 @@ class TelegramBot:
                     traceback.print_trace()
         except:
             traceback.print_trace()
+
+    def handle_all_callback(self, bot, update):
+        cb = update.callback_query
+        data = cb.data
+
+        if data is None:
+            return cb.answer()
+
+        payload = json.loads(data)
+        action = payload.get(JSON_ACTION_FIELD)
+
+        if action is None:
+            return cb.answer('nothing')
+        if action == ACTION_ADD_NEW_ITEM:
+            return cb.answer('Add')
+        if action == ACTION_EDIT_ITEM:
+            return cb.answer('Edit')
+        if action == ACTION_CREATE_BILL_DONE:
+            return cb.answer('Done')
 
     def set_session(self, message, action_type, trans):
         user = message.from_user
@@ -110,4 +140,34 @@ class TelegramBot:
             )
 
     def get_new_bill_keyboard(self, bill_id):
-        pass
+        add_btn = InlineKeyboardButton(
+            text="Add item",
+            callback_data=self.get_action_callback_data(
+                ACTION_ADD_NEW_ITEM,
+                bill_id
+            )
+        )
+        edit_btn = InlineKeyboardButton(
+            text="Edit item",
+            callback_data=self.get_action_callback_data(
+                ACTION_EDIT_ITEM,
+                bill_id
+            )
+        )
+        done_btn = InlineKeyboardButton(
+            text="Done",
+            callback_data=self.get_action_callback_data(
+                ACTION_CREATE_BILL_DONE,
+                bill_id
+            )
+        )
+        return InlineKeyboardMarkup(
+            [[add_btn], [edit_btn], [done_btn]]
+        )
+
+    def get_action_callback_data(self, action, bill_id):
+        data = {
+            JSON_ACTION_FIELD: action,
+            JSON_BILL_FIELD: bill_id
+        }
+        return json.dumps(data)
