@@ -1,6 +1,7 @@
 from telegram.ext import Updater, Filters, CommandHandler, MessageHandler, CallbackQueryHandler
 from telegram.inlinekeyboardmarkup import InlineKeyboardMarkup
 from telegram.inlinekeyboardbutton import InlineKeyboardButton
+from telegram.parsemode import ParseMode
 from database import Transaction
 import json
 import traceback
@@ -10,12 +11,19 @@ PRIVATE_CHAT = 'private'
 ACTION_NEWBILL_SET_NAME = 0
 ACTION_ADD_NEW_ITEM = 1
 ACTION_EDIT_ITEM = 2
-ACTION_CREATE_BILL_DONE = 3
+ACTION_DELETE_ITEM = 3
+ACTION_ADD_TAX = 4
+ACTION_EDIT_TAX = 5
+ACTION_DELETE_TAX = 6
+ACTION_CREATE_BILL_DONE = 7
 REQUEST_BILL_NAME = "Send me a name for the new bill you want to create."
 ERROR_INVALID_BILL_NAME = "Sorry, the bill name provided is invalid. Name of the bill can only be 250 characters long."
 ERROR_SOMETHING_WENT_WRONG = "Sorry, an error has occurred. Please try again in a few moments."
 JSON_ACTION_FIELD = 'a'
 JSON_BILL_FIELD = 'b'
+EMOJI_MONEY_BAG = '\u1F4B0'
+EMOJI_TAX = '\u1F4B8'
+
 
 class TelegramBot:
     def __init__(self, token, db):
@@ -130,27 +138,97 @@ class TelegramBot:
             trans.reset_action(msg.from_user.id, msg.chat_id)
             return bot.sendMessage(
                 chat_id=msg.chat_id,
-                text=text,
+                text=self.get_bill_text(bill_id, msg.from_user.id, trans),
+                parse_mode=ParseMode.HTML,
                 reply_markup=self.get_new_bill_keyboard(bill_id)
             )
+        except BillError as e:
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=str(e)
+            )
         except Exception as e:
+            print(e)
+            traceback.print_trace()
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=ERROR_SOMETHING_WENT_WRONG
             )
 
+    def get_bill_text(self, bill_id, user_id, trans):
+        bill = trans.get_bill_details(bill_id, user_id)
+        if bill.get('title') is None or len(bill.get('title')) == 0:
+            raise BillError('Bill does not exist')
+
+        title_text = '<b>{}</b>'.format(self.escape_html(bill['title']))
+
+        bill_items = bill.get('items')
+        items_text = []
+        total = 0
+        if bill_items is None or len(bill_items) < 1:
+            items_text.append('<i>Currently no items</i>')
+        else:
+            for i, item in enumerate(bill_items):
+                title, price = item
+                total += price
+
+                items_text.append(str(i) + '. ' + title + '\n' +
+                                  EMOJI_MONEY_BAG + str(price))
+
+        bill_taxes = bill.get('taxes')
+        taxes_text = []
+        if bill_taxes is not None:
+            for title, tax in bill_taxes:
+                total += (tax * total / 100)
+                taxes_text.append(EMOJI_TAX + ' ' + title + ': ' + tax + '%')
+
+        text = title_text + '\n\n' + '\n'.join(items_text)
+        if len(taxes_text) > 0:
+            text += '\n\n' + '\n'.join(taxes_text)
+
+        text += '\n\n' + 'Total: ' + str(total)
+        return text
+
     def get_new_bill_keyboard(self, bill_id):
-        add_btn = InlineKeyboardButton(
-            text="Add item",
+        add_item_btn = InlineKeyboardButton(
+            text="Add item(s)",
             callback_data=self.get_action_callback_data(
                 ACTION_ADD_NEW_ITEM,
                 bill_id
             )
         )
-        edit_btn = InlineKeyboardButton(
+        edit_item_btn = InlineKeyboardButton(
             text="Edit item",
             callback_data=self.get_action_callback_data(
                 ACTION_EDIT_ITEM,
+                bill_id
+            )
+        )
+        del_item_btn = InlineKeyboardButton(
+            text="Delete item",
+            callback_data=self.get_action_callback_data(
+                ACTION_DELETE_ITEM,
+                bill_id
+            )
+        )
+        add_tax_btn = InlineKeyboardButton(
+            text="Add item(s)",
+            callback_data=self.get_action_callback_data(
+                ACTION_ADD_TAX,
+                bill_id
+            )
+        )
+        edit_tax_btn = InlineKeyboardButton(
+            text="Edit item",
+            callback_data=self.get_action_callback_data(
+                ACTION_EDIT_TAX,
+                bill_id
+            )
+        )
+        del_tax_btn = InlineKeyboardButton(
+            text="Delete item",
+            callback_data=self.get_action_callback_data(
+                ACTION_DELETE_TAX,
                 bill_id
             )
         )
@@ -162,7 +240,13 @@ class TelegramBot:
             )
         )
         return InlineKeyboardMarkup(
-            [[add_btn], [edit_btn], [done_btn]]
+            [[add_item_btn],
+             [edit_item_btn],
+             [del_item_btn],
+             [add_tax_btn],
+             [edit_tax_btn],
+             [del_tax_btn],
+             [done_btn]]
         )
 
     def get_action_callback_data(self, action, bill_id):
@@ -171,3 +255,19 @@ class TelegramBot:
             JSON_BILL_FIELD: bill_id
         }
         return json.dumps(data)
+
+    @staticmethod
+    def escape_html(s):
+        arr = s.split('&')
+        escaped = []
+
+        for sgmt in arr:
+            a = sgmt.replace('<', '&lt;')
+            a = a.replace('>', '&gt;')
+            escaped.append(a)
+
+        return '&amp;'.join(escaped)
+
+
+class BillError(Exception):
+    pass

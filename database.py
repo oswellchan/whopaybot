@@ -79,7 +79,7 @@ class Transaction:
 
     def get_pending_action(self, chat_id, user_id):
         """\
-        Get pending action. Also serves as lock against concurrent.
+        Get pending action. Also serves as lock against concurrent access.
         """
         try:
             self.cursor.execute("""\
@@ -134,6 +134,49 @@ class Transaction:
         except Exception as e:
             self.is_error = True
             raise e
+
+    def get_bill_details(self, bill_id, user_id):
+        bill = {
+            'title': '',
+            'items': [],
+            'taxes': []
+        }
+
+        try:
+            self.cursor.execute("""\
+                SELECT b.title, i.name, i.price
+                    FROM bills b
+                LEFT JOIN bill_items bi ON bi.bill_id = b.id
+                LEFT JOIN items i ON i.id = bi.item_id
+                WHERE b.id = %s
+                    AND b.owner_id = %s
+            """, (bill_id, user_id)
+            )
+
+            rows = self.cursor.fetchall()
+            if self.cursor.rowcount == 1:
+                bill['title'] = rows[0][0]
+            else:
+                for row in rows:
+                    bill['title'] = row[0]
+                    bill['items'].append((row[1], row[2]))
+
+            self.cursor.execute("""\
+                SELECT bt.title, bt.amount
+                    FROM bill_taxes bt
+                INNER JOIN bills b ON b.id = bt.bill_id
+                WHERE b.id = %s
+                    AND b.owner_id = %s
+            """, (bill_id, user_id)
+            )
+
+            bill['taxes'] = self.cursor.fetchall()
+
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+        return bill
 
     @staticmethod
     def generate_id(length):
