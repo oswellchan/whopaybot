@@ -16,6 +16,9 @@ ACTION_ADD_TAX = 4
 ACTION_EDIT_TAX = 5
 ACTION_DELETE_TAX = 6
 ACTION_CREATE_BILL_DONE = 7
+ACTION_GET_NEW_BILL_KEYBOARD = 8
+ACTION_GET_MODIFY_ITEM_KEYBOARD = 9
+ACTION_GET_MODIFY_TAX_KEYBOARD = 10
 REQUEST_BILL_NAME = "Send me a name for the new bill you want to create."
 ERROR_INVALID_BILL_NAME = "Sorry, the bill name provided is invalid. Name of the bill can only be 250 characters long."
 ERROR_SOMETHING_WENT_WRONG = "Sorry, an error has occurred. Please try again in a few moments."
@@ -91,23 +94,39 @@ class TelegramBot:
             traceback.print_trace()
 
     def handle_all_callback(self, bot, update):
-        cb = update.callback_query
-        data = cb.data
+        try:
+            cb = update.callback_query
+            data = cb.data
 
-        if data is None:
-            return cb.answer()
+            if data is None:
+                return cb.answer()
 
-        payload = json.loads(data)
-        action = payload.get(JSON_ACTION_FIELD)
+            payload = json.loads(data)
+            action = payload.get(JSON_ACTION_FIELD)
+            bill_id = payload.get(JSON_BILL_FIELD)
 
-        if action is None:
-            return cb.answer('nothing')
-        if action == ACTION_ADD_NEW_ITEM:
-            return cb.answer('Add')
-        if action == ACTION_EDIT_ITEM:
-            return cb.answer('Edit')
-        if action == ACTION_CREATE_BILL_DONE:
-            return cb.answer('Done')
+            if action is None:
+                return cb.answer('nothing')
+            if action == ACTION_GET_MODIFY_ITEM_KEYBOARD:
+                cb.edit_message_reply_markup(
+                    reply_markup=self.get_modify_items_keyboard(bill_id)
+                )
+            if action == ACTION_GET_MODIFY_TAX_KEYBOARD:
+                cb.edit_message_reply_markup(
+                    reply_markup=self.get_modify_taxes_keyboard(bill_id)
+                )
+            if action == ACTION_GET_NEW_BILL_KEYBOARD:
+                cb.edit_message_reply_markup(
+                    reply_markup=self.get_new_bill_keyboard(bill_id)
+                )
+            if action == ACTION_ADD_NEW_ITEM:
+                return cb.answer('Add')
+            if action == ACTION_EDIT_ITEM:
+                return cb.answer('Edit')
+            if action == ACTION_CREATE_BILL_DONE:
+                return cb.answer('Done')
+        except Exception as e:
+            print(e)
 
     def set_session(self, message, action_type, trans):
         user = message.from_user
@@ -190,6 +209,34 @@ class TelegramBot:
         return text
 
     def get_new_bill_keyboard(self, bill_id):
+        modify_items_btn = InlineKeyboardButton(
+            text="Add/Edit Items",
+            callback_data=self.get_action_callback_data(
+                ACTION_GET_MODIFY_ITEM_KEYBOARD,
+                bill_id
+            )
+        )
+        modify_taxes_btn = InlineKeyboardButton(
+            text="Add/Edit Taxes",
+            callback_data=self.get_action_callback_data(
+                ACTION_GET_MODIFY_TAX_KEYBOARD,
+                bill_id
+            )
+        )
+        done_btn = InlineKeyboardButton(
+            text="Done",
+            callback_data=self.get_action_callback_data(
+                ACTION_CREATE_BILL_DONE,
+                bill_id
+            )
+        )
+        return InlineKeyboardMarkup(
+            [[modify_items_btn],
+             [modify_taxes_btn],
+             [done_btn]]
+        )
+
+    def get_modify_items_keyboard(self, bill_id):
         add_item_btn = InlineKeyboardButton(
             text="Add item(s)",
             callback_data=self.get_action_callback_data(
@@ -211,31 +258,10 @@ class TelegramBot:
                 bill_id
             )
         )
-        add_tax_btn = InlineKeyboardButton(
-            text="Add item(s)",
+        back_btn = InlineKeyboardButton(
+            text="Back",
             callback_data=self.get_action_callback_data(
-                ACTION_ADD_TAX,
-                bill_id
-            )
-        )
-        edit_tax_btn = InlineKeyboardButton(
-            text="Edit item",
-            callback_data=self.get_action_callback_data(
-                ACTION_EDIT_TAX,
-                bill_id
-            )
-        )
-        del_tax_btn = InlineKeyboardButton(
-            text="Delete item",
-            callback_data=self.get_action_callback_data(
-                ACTION_DELETE_TAX,
-                bill_id
-            )
-        )
-        done_btn = InlineKeyboardButton(
-            text="Done",
-            callback_data=self.get_action_callback_data(
-                ACTION_CREATE_BILL_DONE,
+                ACTION_GET_NEW_BILL_KEYBOARD,
                 bill_id
             )
         )
@@ -243,10 +269,43 @@ class TelegramBot:
             [[add_item_btn],
              [edit_item_btn],
              [del_item_btn],
-             [add_tax_btn],
+             [back_btn]]
+        )
+
+    def get_modify_taxes_keyboard(self, bill_id):
+        add_tax_btn = InlineKeyboardButton(
+            text="Add tax",
+            callback_data=self.get_action_callback_data(
+                ACTION_ADD_TAX,
+                bill_id
+            )
+        )
+        edit_tax_btn = InlineKeyboardButton(
+            text="Edit tax",
+            callback_data=self.get_action_callback_data(
+                ACTION_EDIT_TAX,
+                bill_id
+            )
+        )
+        del_tax_btn = InlineKeyboardButton(
+            text="Delete tax",
+            callback_data=self.get_action_callback_data(
+                ACTION_DELETE_TAX,
+                bill_id
+            )
+        )
+        back_btn = InlineKeyboardButton(
+            text="Back",
+            callback_data=self.get_action_callback_data(
+                ACTION_GET_NEW_BILL_KEYBOARD,
+                bill_id
+            )
+        )
+        return InlineKeyboardMarkup(
+            [[add_tax_btn],
              [edit_tax_btn],
              [del_tax_btn],
-             [done_btn]]
+             [back_btn]]
         )
 
     def get_action_callback_data(self, action, bill_id):
