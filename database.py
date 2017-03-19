@@ -1,5 +1,6 @@
 import psycopg2
 import uuid
+import json
 
 
 UNIQUE_VIOLATION = '23505'
@@ -63,27 +64,31 @@ class Transaction:
             self.is_error = True
             raise e
 
-    def add_session(self, chat_id, user_id, action):
+    def add_session(self, chat_id, user_id, action, data=None):
+        if data is not None:
+            data = json.dumps(data)
+
         try:
             self.cursor.execute("""\
-                INSERT INTO sessions (chat_id, user_id, action, updated_at)
-                    VALUES(%s, %s, %s, NOW())
+                INSERT INTO sessions (chat_id, user_id, action, data,
+                    updated_at)
+                    VALUES(%s, %s, %s, %s, NOW())
                 ON CONFLICT(chat_id) DO UPDATE SET
                     chat_id=EXCLUDED.chat_id, user_id=EXCLUDED.user_id,
                     action=EXCLUDED.action, updated_at=EXCLUDED.updated_at;
-            """, (chat_id, user_id, action)
+            """, (chat_id, user_id, action, data)
             )
         except Exception as e:
             self.is_error = True
             raise e
 
-    def get_pending_action(self, chat_id, user_id):
+    def get_session(self, chat_id, user_id):
         """\
         Get pending action. Also serves as lock against concurrent access.
         """
         try:
             self.cursor.execute("""\
-                SELECT s.action FROM sessions s
+                SELECT s.action, s.data FROM sessions s
                 WHERE s.chat_id = %s
                     AND s.user_id = %s
                 FOR UPDATE;
@@ -94,12 +99,16 @@ class Transaction:
             if len(rows) > 1:
                 raise Exception('More than 1 action.')
 
-            return rows[0][0]
+            data = rows[0][1]
+            if data is not None:
+                data = json.loads(data)
+
+            return rows[0][0], data
         except Exception as e:
             self.is_error = True
             raise e
 
-    def create_new_bill(self, title, owner_id):
+    def add_bill(self, title, owner_id):
         try:
             count = 0
             while count < 10:
@@ -122,14 +131,36 @@ class Transaction:
             self.is_error = True
             raise ex
 
-    def reset_action(self, chat_id, user_id):
+    def add_item(self, bill_id, item_name, price):
+        try:
+            self.cursor.execute("""\
+                INSERT INTO items (name, price)
+                    VALUES (%s, %s)
+                RETURNING id;
+            """, (item_name, price)
+            )
+
+            if self.cursor.rowcount < 1:
+                raise Exception('Add item failed')
+
+            item_id = self.cursor.fetchone()[0]
+            self.cursor.execute("""\
+                INSERT INTO bill_items (bill_id, item_id)
+                    VALUES (%s, %s);
+            """, (bill_id, item_id)
+            )
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def reset_session(self, chat_id, user_id, data=None):
         try:
             self.cursor.execute("""\
                 UPDATE sessions
-                    SET action = NULL
+                    SET action = NULL, data = %s
                 WHERE chat_id = %s
                     AND user_id = %s
-            """, (chat_id, user_id)
+            """, (data, chat_id, user_id)
             )
         except Exception as e:
             self.is_error = True
@@ -144,7 +175,7 @@ class Transaction:
 
         try:
             self.cursor.execute("""\
-                SELECT b.title, i.name, i.price
+                SELECT b.title, i.id, i.name, i.price
                     FROM bills b
                 LEFT JOIN bill_items bi ON bi.bill_id = b.id
                 LEFT JOIN items i ON i.id = bi.item_id
@@ -158,8 +189,9 @@ class Transaction:
                 bill['title'] = rows[0][0]
             else:
                 for row in rows:
-                    bill['title'] = row[0]
-                    bill['items'].append((row[1], row[2]))
+                    bill_name, item_id, item_name, item_price = row
+                    bill['title'] = bill_name
+                    bill['items'].append((item_id, item_name, item_price))
 
             self.cursor.execute("""\
                 SELECT bt.title, bt.amount

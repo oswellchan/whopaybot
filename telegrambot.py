@@ -9,7 +9,7 @@ import traceback
 
 PRIVATE_CHAT = 'private'
 ACTION_NEWBILL_SET_NAME = 0
-ACTION_ADD_NEW_ITEM = 1
+ACTION_ADD_ITEM = 1
 ACTION_EDIT_ITEM = 2
 ACTION_DELETE_ITEM = 3
 ACTION_ADD_TAX = 4
@@ -19,8 +19,17 @@ ACTION_CREATE_BILL_DONE = 7
 ACTION_GET_NEW_BILL_KEYBOARD = 8
 ACTION_GET_MODIFY_ITEM_KEYBOARD = 9
 ACTION_GET_MODIFY_TAX_KEYBOARD = 10
+ACTION_ADD_ITEM_PRICE = 11
+ACTION_ADD_NEW_TAX_AMT = 12
+
 REQUEST_BILL_NAME = "Send me a name for the new bill you want to create."
-ERROR_INVALID_BILL_NAME = "Sorry, the bill name provided is invalid. Name of the bill can only be 250 characters long."
+REQUEST_ITEM_NAME = "Okay. Send me the name of the item."
+REQUEST_ITEM_PRICE = "Great! Now send me the price of the item. Leave out the currency and provide only the value (e.g. 8.00 or 8)."
+REQUEST_TAX_NAME = "Okay. Send me the name of the tax."
+ERROR_INVALID_BILL_NAME = "Sorry, the bill name provided is invalid. Name of the bill can only be 250 characters long. Please try again."
+ERROR_INVALID_ITEM_NAME = "Sorry, the item name provided is invalid. Name of the item can only be 250 characters long. Please try again."
+ERROR_INVALID_TAX_NAME = "Sorry, the item tax provided is invalid. Name of the tax can only be 250 characters long. Please try again."
+ERROR_INVALID_FLOAT_VALUE = "Sorry, the {} provided is invalid. Value provided should be strictly digits only or with an optional decimal point (e.g. 8.00 or 8)."
 ERROR_SOMETHING_WENT_WRONG = "Sorry, an error has occurred. Please try again in a few moments."
 JSON_ACTION_FIELD = 'a'
 JSON_BILL_FIELD = 'b'
@@ -82,12 +91,16 @@ class TelegramBot:
             msg = update.message
             with Transaction(conn) as trans:
                 try:
-                    pending_action = trans.get_pending_action(
+                    pending_action, data = trans.get_session(
                         msg.from_user.id,
                         msg.chat_id
                     )
                     if pending_action == ACTION_NEWBILL_SET_NAME:
                         return self.add_bill_name(msg, bot, trans)
+                    if pending_action == ACTION_ADD_ITEM:
+                        return self.add_item(msg, bot, trans, data)
+                    if pending_action == ACTION_ADD_ITEM_PRICE:
+                        return self.add_item_price(msg, bot, trans, data)
                 except Exception as e:
                     traceback.print_trace()
         except:
@@ -95,40 +108,46 @@ class TelegramBot:
 
     def handle_all_callback(self, bot, update):
         try:
-            cb = update.callback_query
-            data = cb.data
+            cbq = update.callback_query
+            data = cbq.data
 
             if data is None:
-                return cb.answer()
+                return cbq.answer()
 
-            payload = json.loads(data)
-            action = payload.get(JSON_ACTION_FIELD)
-            bill_id = payload.get(JSON_BILL_FIELD)
+            conn = self.db.get_connection()
+            with Transaction(conn) as trans:
+                trans.get_session(  # create lock to prevent concurrent requests
+                    cbq.message.from_user.id,
+                    cbq.message.chat_id
+                )
+                payload = json.loads(data)
+                action = payload.get(JSON_ACTION_FIELD)
+                bill_id = payload.get(JSON_BILL_FIELD)
 
-            if action is None:
-                return cb.answer('nothing')
-            if action == ACTION_GET_MODIFY_ITEM_KEYBOARD:
-                cb.edit_message_reply_markup(
-                    reply_markup=self.get_modify_items_keyboard(bill_id)
-                )
-            if action == ACTION_GET_MODIFY_TAX_KEYBOARD:
-                cb.edit_message_reply_markup(
-                    reply_markup=self.get_modify_taxes_keyboard(bill_id)
-                )
-            if action == ACTION_GET_NEW_BILL_KEYBOARD:
-                cb.edit_message_reply_markup(
-                    reply_markup=self.get_new_bill_keyboard(bill_id)
-                )
-            if action == ACTION_ADD_NEW_ITEM:
-                return cb.answer('Add')
-            if action == ACTION_EDIT_ITEM:
-                return cb.answer('Edit')
-            if action == ACTION_CREATE_BILL_DONE:
-                return cb.answer('Done')
+                if action is None:
+                    return cbq.answer('nothing')
+                if action == ACTION_GET_MODIFY_ITEM_KEYBOARD:
+                    cbq.edit_message_reply_markup(
+                        reply_markup=self.get_modify_items_keyboard(bill_id)
+                    )
+                if action == ACTION_GET_MODIFY_TAX_KEYBOARD:
+                    cbq.edit_message_reply_markup(
+                        reply_markup=self.get_modify_taxes_keyboard(bill_id)
+                    )
+                if action == ACTION_GET_NEW_BILL_KEYBOARD:
+                    cbq.edit_message_reply_markup(
+                        reply_markup=self.get_new_bill_keyboard(bill_id)
+                    )
+                if action == ACTION_ADD_ITEM:
+                    self.ask_for_item(bot, cbq, bill_id, trans)
+                if action == ACTION_EDIT_ITEM:
+                    return cbq.answer('Edit')
+                if action == ACTION_CREATE_BILL_DONE:
+                    return cbq.answer('Done')
         except Exception as e:
             print(e)
 
-    def set_session(self, message, action_type, trans):
+    def set_session(self, message, action_type, trans, data=None):
         user = message.from_user
         trans.add_user(
             user.id,
@@ -136,7 +155,7 @@ class TelegramBot:
             user.last_name,
             user.username
         )
-        trans.add_session(message.chat_id, user.id, action_type)
+        trans.add_session(message.chat_id, user.id, action_type, data)
 
     def add_bill_name(self, msg, bot, trans):
         try:
@@ -153,8 +172,8 @@ class TelegramBot:
                     text=ERROR_INVALID_BILL_NAME
                 )
 
-            bill_id = trans.create_new_bill(text, msg.from_user.id)
-            trans.reset_action(msg.from_user.id, msg.chat_id)
+            bill_id = trans.add_bill(text, msg.from_user.id)
+            trans.reset_session(msg.from_user.id, msg.chat_id)
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=self.get_bill_text(bill_id, msg.from_user.id, trans),
@@ -240,7 +259,7 @@ class TelegramBot:
         add_item_btn = InlineKeyboardButton(
             text="Add item(s)",
             callback_data=self.get_action_callback_data(
-                ACTION_ADD_NEW_ITEM,
+                ACTION_ADD_ITEM,
                 bill_id
             )
         )
@@ -307,6 +326,95 @@ class TelegramBot:
              [del_tax_btn],
              [back_btn]]
         )
+
+    def ask_for_item(self, bot, cbq, bill_id, trans):
+        self.set_session(
+            cbq.message,
+            ACTION_ADD_ITEM,
+            trans,
+            {'bill_id': bill_id}
+        )
+        bot.sendMessage(chat_id=cbq.message.chat_id, text=REQUEST_ITEM_NAME)
+
+    def add_item(self, msg, bot, trans, data):
+        try:
+            if Filters.text.filter(msg):
+                return self.add_item_name(msg, bot, trans, data)
+
+            if Filters.image.filter(msg):
+                return self.add_items_img(msg, bot, trans, data)
+
+            # all other message types invalid
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_INVALID_ITEM_NAME
+            )
+        except BillError as e:
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=str(e)
+            )
+        except Exception as e:
+            print(e)
+            traceback.print_trace()
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_SOMETHING_WENT_WRONG
+            )
+
+    def add_item_name(self, msg, bot, trans, data):
+        text = msg.text
+        if (text is None or len(text) < 1 or len(text) > 250):
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_INVALID_ITEM_NAME
+            )
+
+        data['item_name'] = text
+        trans.set_session(
+            msg,
+            ACTION_ADD_ITEM_PRICE,
+            trans,
+            data
+        )
+        return bot.sendMessage(
+            chat_id=msg.chat_id,
+            text=REQUEST_ITEM_PRICE
+        )
+
+    def add_item_price(self, msg, bot, trans, data):
+        text = msg.text
+
+        try:
+            price = float(text)
+            bill_id = data.get('bill_id')
+            if bill_id is None:
+                raise Exception('bill_id is None')
+            item_name = data.get('item_name')
+            if item_name is None:
+                raise Exception('item_name is None')
+            trans.add_item(bill_id, item_name, price)
+            trans.reset_session(msg.from_user.id, msg.chat_id)
+        except ValueError as e:
+            print(e)
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_INVALID_FLOAT_VALUE.format('item price')
+            )
+        except Exception as e:
+            print(e)
+
+    def add_items_img(self, msg, bot, trans, data):
+        pass
+
+    def ask_for_tax_name(self, bot, cbq, bill_id, trans):
+        self.set_session(
+            cbq.message,
+            ACTION_ADD_TAX,
+            trans,
+            {'bill_id': bill_id}
+        )
+        bot.sendMessage(chat_id=cbq.message.chat_id, text=REQUEST_TAX_NAME)
 
     def get_action_callback_data(self, action, bill_id):
         data = {
