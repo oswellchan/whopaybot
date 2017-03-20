@@ -4,7 +4,6 @@ from telegram.inlinekeyboardbutton import InlineKeyboardButton
 from telegram.parsemode import ParseMode
 from database import Transaction
 import json
-import traceback
 
 
 PRIVATE_CHAT = 'private'
@@ -71,7 +70,8 @@ class TelegramBot:
             conn = self.db.get_connection()
             with Transaction(conn) as trans:
                 self.set_session(
-                    update.message,
+                    update.message.chat_id,
+                    update.message.from_user,
                     ACTION_NEWBILL_SET_NAME,
                     trans
                 )
@@ -80,20 +80,19 @@ class TelegramBot:
                 text=REQUEST_BILL_NAME
             )
         except Exception as e:
-            traceback.print_trace()
+            print(e)
 
     def handle_all_msg(self, bot, update):
         try:
             if update.message.chat.type != PRIVATE_CHAT:
                 return
-
             conn = self.db.get_connection()
             msg = update.message
             with Transaction(conn) as trans:
                 try:
                     pending_action, data = trans.get_session(
+                        msg.chat_id,
                         msg.from_user.id,
-                        msg.chat_id
                     )
                     if pending_action == ACTION_NEWBILL_SET_NAME:
                         return self.add_bill_name(msg, bot, trans)
@@ -102,9 +101,9 @@ class TelegramBot:
                     if pending_action == ACTION_ADD_ITEM_PRICE:
                         return self.add_item_price(msg, bot, trans, data)
                 except Exception as e:
-                    traceback.print_trace()
-        except:
-            traceback.print_trace()
+                    print(e)
+        except Exception as e:
+            print(e)
 
     def handle_all_callback(self, bot, update):
         try:
@@ -117,8 +116,8 @@ class TelegramBot:
             conn = self.db.get_connection()
             with Transaction(conn) as trans:
                 trans.get_session(  # create lock to prevent concurrent requests
-                    cbq.message.from_user.id,
-                    cbq.message.chat_id
+                    cbq.message.chat_id,
+                    cbq.from_user.id
                 )
                 payload = json.loads(data)
                 action = payload.get(JSON_ACTION_FIELD)
@@ -147,15 +146,14 @@ class TelegramBot:
         except Exception as e:
             print(e)
 
-    def set_session(self, message, action_type, trans, data=None):
-        user = message.from_user
+    def set_session(self, chat_id, user, action_type, trans, data=None):
         trans.add_user(
             user.id,
             user.first_name,
             user.last_name,
             user.username
         )
-        trans.add_session(message.chat_id, user.id, action_type, data)
+        trans.add_session(chat_id, user.id, action_type, data)
 
     def add_bill_name(self, msg, bot, trans):
         try:
@@ -174,20 +172,21 @@ class TelegramBot:
 
             bill_id = trans.add_bill(text, msg.from_user.id)
             trans.reset_session(msg.from_user.id, msg.chat_id)
-            return bot.sendMessage(
-                chat_id=msg.chat_id,
-                text=self.get_bill_text(bill_id, msg.from_user.id, trans),
-                parse_mode=ParseMode.HTML,
-                reply_markup=self.get_new_bill_keyboard(bill_id)
+            return self.send_bill_response(
+                bot,
+                msg.chat_id,
+                msg.from_user.id,
+                bill_id,
+                trans
             )
         except BillError as e:
+            print(e)
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=str(e)
             )
         except Exception as e:
             print(e)
-            traceback.print_trace()
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=ERROR_SOMETHING_WENT_WRONG
@@ -207,10 +206,10 @@ class TelegramBot:
             items_text.append('<i>Currently no items</i>')
         else:
             for i, item in enumerate(bill_items):
-                title, price = item
+                __, title, price = item
                 total += price
 
-                items_text.append(str(i) + '. ' + title + '\n' +
+                items_text.append(str(i + 1) + '. ' + title + '\n' +
                                   EMOJI_MONEY_BAG + str(price))
 
         bill_taxes = bill.get('taxes')
@@ -226,6 +225,14 @@ class TelegramBot:
 
         text += '\n\n' + 'Total: ' + str(total)
         return text
+
+    def send_bill_response(self, bot, chat_id, user_id, bill_id, trans):
+        bot.sendMessage(
+            chat_id=chat_id,
+            text=self.get_bill_text(bill_id, user_id, trans),
+            parse_mode=ParseMode.HTML,
+            reply_markup=self.get_new_bill_keyboard(bill_id)
+        )
 
     def get_new_bill_keyboard(self, bill_id):
         modify_items_btn = InlineKeyboardButton(
@@ -329,11 +336,13 @@ class TelegramBot:
 
     def ask_for_item(self, bot, cbq, bill_id, trans):
         self.set_session(
-            cbq.message,
+            cbq.message.chat_id,
+            cbq.from_user,
             ACTION_ADD_ITEM,
             trans,
-            {'bill_id': bill_id}
+            data={'bill_id': bill_id}
         )
+        cbq.answer()
         bot.sendMessage(chat_id=cbq.message.chat_id, text=REQUEST_ITEM_NAME)
 
     def add_item(self, msg, bot, trans, data):
@@ -356,7 +365,6 @@ class TelegramBot:
             )
         except Exception as e:
             print(e)
-            traceback.print_trace()
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=ERROR_SOMETHING_WENT_WRONG
@@ -371,11 +379,12 @@ class TelegramBot:
             )
 
         data['item_name'] = text
-        trans.set_session(
-            msg,
+        self.set_session(
+            msg.chat_id,
+            msg.from_user,
             ACTION_ADD_ITEM_PRICE,
             trans,
-            data
+            data=data
         )
         return bot.sendMessage(
             chat_id=msg.chat_id,
@@ -395,6 +404,13 @@ class TelegramBot:
                 raise Exception('item_name is None')
             trans.add_item(bill_id, item_name, price)
             trans.reset_session(msg.from_user.id, msg.chat_id)
+            return self.send_bill_response(
+                bot,
+                msg.chat_id,
+                msg.from_user.id,
+                bill_id,
+                trans
+            )
         except ValueError as e:
             print(e)
             return bot.sendMessage(
@@ -409,10 +425,11 @@ class TelegramBot:
 
     def ask_for_tax_name(self, bot, cbq, bill_id, trans):
         self.set_session(
-            cbq.message,
+            cbq.message.chat_id,
+            cbq.from_user,
             ACTION_ADD_TAX,
             trans,
-            {'bill_id': bill_id}
+            data={'bill_id': bill_id}
         )
         bot.sendMessage(chat_id=cbq.message.chat_id, text=REQUEST_TAX_NAME)
 

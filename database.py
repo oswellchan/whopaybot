@@ -73,9 +73,10 @@ class Transaction:
                 INSERT INTO sessions (chat_id, user_id, action, data,
                     updated_at)
                     VALUES(%s, %s, %s, %s, NOW())
-                ON CONFLICT(chat_id) DO UPDATE SET
+                ON CONFLICT(chat_id, user_id) DO UPDATE SET
                     chat_id=EXCLUDED.chat_id, user_id=EXCLUDED.user_id,
-                    action=EXCLUDED.action, updated_at=EXCLUDED.updated_at;
+                    action=EXCLUDED.action, data=EXCLUDED.data,
+                    updated_at=EXCLUDED.updated_at;
             """, (chat_id, user_id, action, data)
             )
         except Exception as e:
@@ -96,12 +97,15 @@ class Transaction:
             )
 
             rows = self.cursor.fetchall()
+
             if len(rows) > 1:
                 raise Exception('More than 1 action.')
 
             data = rows[0][1]
             if data is not None:
                 data = json.loads(data)
+            else:
+                data = {}
 
             return rows[0][0], data
         except Exception as e:
@@ -119,7 +123,6 @@ class Transaction:
                     ON CONFLICT(id) DO NOTHING;
                 """, (bill_id, title, owner_id)
                 )
-
                 if self.cursor.rowcount > 0:
                     return bill_id
 
@@ -143,7 +146,8 @@ class Transaction:
             if self.cursor.rowcount < 1:
                 raise Exception('Add item failed')
 
-            item_id = self.cursor.fetchone()[0]
+            item = self.cursor.fetchone()
+            item_id = item[0]
             self.cursor.execute("""\
                 INSERT INTO bill_items (bill_id, item_id)
                     VALUES (%s, %s);
