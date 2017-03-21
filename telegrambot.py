@@ -32,8 +32,8 @@ ERROR_INVALID_FLOAT_VALUE = "Sorry, the {} provided is invalid. Value provided s
 ERROR_SOMETHING_WENT_WRONG = "Sorry, an error has occurred. Please try again in a few moments."
 JSON_ACTION_FIELD = 'a'
 JSON_BILL_FIELD = 'b'
-EMOJI_MONEY_BAG = '\u1F4B0'
-EMOJI_TAX = '\u1F4B8'
+EMOJI_MONEY_BAG = '\U0001F4B0'
+EMOJI_TAX = '\U0001F4B8'
 
 
 class TelegramBot:
@@ -210,7 +210,7 @@ class TelegramBot:
                 total += price
 
                 items_text.append(str(i + 1) + '. ' + title + '\n' +
-                                  EMOJI_MONEY_BAG + str(price))
+                                  EMOJI_MONEY_BAG + "{:.2f}".format(price))
 
         bill_taxes = bill.get('taxes')
         taxes_text = []
@@ -223,7 +223,7 @@ class TelegramBot:
         if len(taxes_text) > 0:
             text += '\n\n' + '\n'.join(taxes_text)
 
-        text += '\n\n' + 'Total: ' + str(total)
+        text += '\n\n' + 'Total: ' + "{:.2f}".format(total)
         return text
 
     def send_bill_response(self, bot, chat_id, user_id, bill_id, trans):
