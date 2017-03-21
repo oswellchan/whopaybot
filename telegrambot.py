@@ -4,6 +4,7 @@ from telegram.inlinekeyboardbutton import InlineKeyboardButton
 from telegram.parsemode import ParseMode
 from database import Transaction
 import json
+import utils
 
 
 PRIVATE_CHAT = 'private'
@@ -193,38 +194,42 @@ class TelegramBot:
             )
 
     def get_bill_text(self, bill_id, user_id, trans):
-        bill = trans.get_bill_details(bill_id, user_id)
-        if bill.get('title') is None or len(bill.get('title')) == 0:
-            raise BillError('Bill does not exist')
+        try:
+            bill = trans.get_bill_details(bill_id, user_id)
+            if bill.get('title') is None or len(bill.get('title')) == 0:
+                raise BillError('Bill does not exist')
 
-        title_text = '<b>{}</b>'.format(self.escape_html(bill['title']))
+            title_text = '<b>{}</b>'.format(self.escape_html(bill['title']))
 
-        bill_items = bill.get('items')
-        items_text = []
-        total = 0
-        if bill_items is None or len(bill_items) < 1:
-            items_text.append('<i>Currently no items</i>')
-        else:
-            for i, item in enumerate(bill_items):
-                __, title, price = item
-                total += price
+            bill_items = bill.get('items')
+            items_text = []
+            total = 0
+            if bill_items is None or len(bill_items) < 1:
+                items_text.append('<i>Currently no items</i>')
+            else:
+                for i, item in enumerate(bill_items):
+                    __, title, price = item
+                    total += price
 
-                items_text.append(str(i + 1) + '. ' + title + '\n' +
-                                  EMOJI_MONEY_BAG + "{:.2f}".format(price))
+                    items_text.append(str(i + 1) + '. ' + title + '\n' +
+                                      EMOJI_MONEY_BAG + '{:.2f}'.format(price))
 
-        bill_taxes = bill.get('taxes')
-        taxes_text = []
-        if bill_taxes is not None:
-            for title, tax in bill_taxes:
-                total += (tax * total / 100)
-                taxes_text.append(EMOJI_TAX + ' ' + title + ': ' + tax + '%')
+            bill_taxes = bill.get('taxes')
+            taxes_text = []
+            if bill_taxes is not None:
+                for title, tax in bill_taxes:
+                    total += (tax * total / 100)
+                    taxes_text.append(EMOJI_TAX + ' ' + title + ': ' + tax + '%')
 
-        text = title_text + '\n\n' + '\n'.join(items_text)
-        if len(taxes_text) > 0:
-            text += '\n\n' + '\n'.join(taxes_text)
+            text = title_text + '\n\n' + '\n'.join(items_text)
+            if len(taxes_text) > 0:
+                text += '\n\n' + '\n'.join(taxes_text)
 
-        text += '\n\n' + 'Total: ' + "{:.2f}".format(total)
-        return text
+            text += '\n\n' + 'Total: ' + "{:.2f}".format(total)
+            return text
+        except Exception as e:
+            utils.print_error()
+            print(e)
 
     def send_bill_response(self, bot, chat_id, user_id, bill_id, trans):
         bot.sendMessage(

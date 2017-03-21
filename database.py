@@ -1,6 +1,7 @@
 import psycopg2
 import uuid
 import json
+import utils
 
 
 UNIQUE_VIOLATION = '23505'
@@ -178,25 +179,49 @@ class Transaction:
         }
 
         try:
+            bill['title'] = self.get_bill_name(bill_id, user_id)
+            bill['items'] = self.get_bill_items(bill_id)
+            bill['taxes'] = self.get_bill_taxes(bill_id, user_id)
+
+            return bill
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def get_bill_name(self, bill_id, user_id):
+        try:
             self.cursor.execute("""\
-                SELECT b.title, i.id, i.name, i.price
-                    FROM bills b
-                LEFT JOIN bill_items bi ON bi.bill_id = b.id
-                LEFT JOIN items i ON i.id = bi.item_id
+                SELECT b.title FROM bills b
                 WHERE b.id = %s
                     AND b.owner_id = %s
-            """, (bill_id, user_id)
+                """, (bill_id, user_id)
             )
 
-            rows = self.cursor.fetchall()
-            if self.cursor.rowcount == 1:
-                bill['title'] = rows[0][0]
-            else:
-                for row in rows:
-                    bill_name, item_id, item_name, item_price = row
-                    bill['title'] = bill_name
-                    bill['items'].append((item_id, item_name, item_price))
+            if self.cursor.rowcount != 1:
+                raise Exception('More than 1 bill found')
 
+            return self.cursor.fetchone()[0]
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def get_bill_items(self, bill_id):
+        try:
+            self.cursor.execute("""\
+                SELECT i.id, i.name, i.price
+                    FROM items i
+                INNER JOIN bill_items bi ON bi.item_id = i.id
+                WHERE bi.bill_id = %s
+            """, (bill_id,)
+            )
+            return self.cursor.fetchall()
+        except Exception as e:
+            utils.print_error()
+            self.is_error = True
+            raise e
+
+    def get_bill_taxes(self, bill_id, user_id):
+        try:
             self.cursor.execute("""\
                 SELECT bt.title, bt.amount
                     FROM bill_taxes bt
@@ -206,13 +231,10 @@ class Transaction:
             """, (bill_id, user_id)
             )
 
-            bill['taxes'] = self.cursor.fetchall()
-
+            return self.cursor.fetchall()
         except Exception as e:
             self.is_error = True
             raise e
-
-        return bill
 
     @staticmethod
     def generate_id(length):
