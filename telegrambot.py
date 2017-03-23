@@ -17,14 +17,19 @@ ACTION_EDIT_TAX = 5
 ACTION_DELETE_TAX = 6
 ACTION_CREATE_BILL_DONE = 7
 ACTION_GET_NEW_BILL_KEYBOARD = 8
-ACTION_GET_MODIFY_ITEM_KEYBOARD = 9
-ACTION_GET_MODIFY_TAX_KEYBOARD = 10
+ACTION_GET_MODIFY_ITEMS_KEYBOARD = 9
+ACTION_GET_MODIFY_TAXES_KEYBOARD = 10
 ACTION_ADD_ITEM_PRICE = 11
 ACTION_ADD_NEW_TAX_AMT = 12
+ACTION_EDIT_SPECIFIC_ITEM = 13
+ACTION_EDIT_SPECIFIC_ITEM_NAME = 14
+ACTION_EDIT_SPECIFIC_ITEM_PRICE = 15
 
 REQUEST_BILL_NAME = "Send me a name for the new bill you want to create."
 REQUEST_ITEM_NAME = "Okay. Send me the name of the item."
 REQUEST_ITEM_PRICE = "Great! Now send me the price of the item. Leave out the currency and provide only the value (e.g. 8.00 or 8)."
+REQUEST_EDIT_ITEM_NAME = "Send me the new name of the item."
+REQUEST_EDIT_ITEM_PRICE = "Send me the new price of the item. Leave out the currency and provide only the value (e.g. 8.00 or 8)."
 REQUEST_TAX_NAME = "Okay. Send me the name of the tax."
 ERROR_INVALID_BILL_NAME = "Sorry, the bill name provided is invalid. Name of the bill can only be 250 characters long. Please try again."
 ERROR_INVALID_ITEM_NAME = "Sorry, the item name provided is invalid. Name of the item can only be 250 characters long. Please try again."
@@ -33,6 +38,7 @@ ERROR_INVALID_FLOAT_VALUE = "Sorry, the {} provided is invalid. Value provided s
 ERROR_SOMETHING_WENT_WRONG = "Sorry, an error has occurred. Please try again in a few moments."
 JSON_ACTION_FIELD = 'a'
 JSON_BILL_FIELD = 'b'
+JSON_ITEM_FIELD = 'i'
 EMOJI_MONEY_BAG = '\U0001F4B0'
 EMOJI_TAX = '\U0001F4B8'
 
@@ -101,7 +107,12 @@ class TelegramBot:
                         return self.add_item(msg, bot, trans, data)
                     if pending_action == ACTION_ADD_ITEM_PRICE:
                         return self.add_item_price(msg, bot, trans, data)
+                    if pending_action == ACTION_EDIT_SPECIFIC_ITEM_NAME:
+                        return self.edit_item_name(msg, bot, trans, data)
+                    if pending_action == ACTION_EDIT_SPECIFIC_ITEM_PRICE:
+                        return self.edit_item_price(msg, bot, trans, data)
                 except Exception as e:
+                    utils.print_error()
                     print(e)
         except Exception as e:
             print(e)
@@ -126,11 +137,11 @@ class TelegramBot:
 
                 if action is None:
                     return cbq.answer('nothing')
-                if action == ACTION_GET_MODIFY_ITEM_KEYBOARD:
+                if action == ACTION_GET_MODIFY_ITEMS_KEYBOARD:
                     cbq.edit_message_reply_markup(
                         reply_markup=self.get_modify_items_keyboard(bill_id)
                     )
-                if action == ACTION_GET_MODIFY_TAX_KEYBOARD:
+                if action == ACTION_GET_MODIFY_TAXES_KEYBOARD:
                     cbq.edit_message_reply_markup(
                         reply_markup=self.get_modify_taxes_keyboard(bill_id)
                     )
@@ -139,12 +150,47 @@ class TelegramBot:
                         reply_markup=self.get_new_bill_keyboard(bill_id)
                     )
                 if action == ACTION_ADD_ITEM:
-                    self.ask_for_item(bot, cbq, bill_id, trans)
+                    self.ask_for_item(
+                        bot,
+                        cbq,
+                        bill_id,
+                        trans
+                    )
                 if action == ACTION_EDIT_ITEM:
-                    return cbq.answer('Edit')
+                    cbq.edit_message_reply_markup(
+                        reply_markup=self.get_edit_items_keyboard(
+                            bill_id,
+                            trans
+                        )
+                    )
+                if action == ACTION_EDIT_SPECIFIC_ITEM:
+                    cbq.edit_message_reply_markup(
+                        reply_markup=self.get_edit_item_keyboard(
+                            bill_id,
+                            payload.get(JSON_ITEM_FIELD),
+                            trans
+                        )
+                    )
+                if action == ACTION_EDIT_SPECIFIC_ITEM_NAME:
+                    self.ask_for_edited_item_name(
+                        bot,
+                        cbq,
+                        bill_id,
+                        payload.get(JSON_ITEM_FIELD),
+                        trans
+                    )
+                if action == ACTION_EDIT_SPECIFIC_ITEM_PRICE:
+                    self.ask_for_edited_item_price(
+                        bot,
+                        cbq,
+                        bill_id,
+                        payload.get(JSON_ITEM_FIELD),
+                        trans
+                    )
                 if action == ACTION_CREATE_BILL_DONE:
                     return cbq.answer('Done')
         except Exception as e:
+            utils.print_error()
             print(e)
 
     def set_session(self, chat_id, user, action_type, trans, data=None):
@@ -231,34 +277,38 @@ class TelegramBot:
             utils.print_error()
             print(e)
 
-    def send_bill_response(self, bot, chat_id, user_id, bill_id, trans):
+    def send_bill_response(self, bot, chat_id, user_id,
+                           bill_id, trans, keyboard=None):
+        if keyboard is None:
+            keyboard = self.get_new_bill_keyboard(bill_id)
+
         bot.sendMessage(
             chat_id=chat_id,
             text=self.get_bill_text(bill_id, user_id, trans),
             parse_mode=ParseMode.HTML,
-            reply_markup=self.get_new_bill_keyboard(bill_id)
+            reply_markup=keyboard
         )
 
     def get_new_bill_keyboard(self, bill_id):
         modify_items_btn = InlineKeyboardButton(
             text="Add/Edit Items",
             callback_data=self.get_action_callback_data(
-                ACTION_GET_MODIFY_ITEM_KEYBOARD,
-                bill_id
+                ACTION_GET_MODIFY_ITEMS_KEYBOARD,
+                {JSON_BILL_FIELD: bill_id}
             )
         )
         modify_taxes_btn = InlineKeyboardButton(
             text="Add/Edit Taxes",
             callback_data=self.get_action_callback_data(
-                ACTION_GET_MODIFY_TAX_KEYBOARD,
-                bill_id
+                ACTION_GET_MODIFY_TAXES_KEYBOARD,
+                {JSON_BILL_FIELD: bill_id}
             )
         )
         done_btn = InlineKeyboardButton(
             text="Done",
             callback_data=self.get_action_callback_data(
                 ACTION_CREATE_BILL_DONE,
-                bill_id
+                {JSON_BILL_FIELD: bill_id}
             )
         )
         return InlineKeyboardMarkup(
@@ -272,28 +322,28 @@ class TelegramBot:
             text="Add item(s)",
             callback_data=self.get_action_callback_data(
                 ACTION_ADD_ITEM,
-                bill_id
+                {JSON_BILL_FIELD: bill_id}
             )
         )
         edit_item_btn = InlineKeyboardButton(
             text="Edit item",
             callback_data=self.get_action_callback_data(
                 ACTION_EDIT_ITEM,
-                bill_id
+                {JSON_BILL_FIELD: bill_id}
             )
         )
         del_item_btn = InlineKeyboardButton(
             text="Delete item",
             callback_data=self.get_action_callback_data(
                 ACTION_DELETE_ITEM,
-                bill_id
+                {JSON_BILL_FIELD: bill_id}
             )
         )
         back_btn = InlineKeyboardButton(
             text="Back",
             callback_data=self.get_action_callback_data(
                 ACTION_GET_NEW_BILL_KEYBOARD,
-                bill_id
+                {JSON_BILL_FIELD: bill_id}
             )
         )
         return InlineKeyboardMarkup(
@@ -308,28 +358,28 @@ class TelegramBot:
             text="Add tax",
             callback_data=self.get_action_callback_data(
                 ACTION_ADD_TAX,
-                bill_id
+                {JSON_BILL_FIELD: bill_id}
             )
         )
         edit_tax_btn = InlineKeyboardButton(
             text="Edit tax",
             callback_data=self.get_action_callback_data(
                 ACTION_EDIT_TAX,
-                bill_id
+                {JSON_BILL_FIELD: bill_id}
             )
         )
         del_tax_btn = InlineKeyboardButton(
             text="Delete tax",
             callback_data=self.get_action_callback_data(
                 ACTION_DELETE_TAX,
-                bill_id
+                {JSON_BILL_FIELD: bill_id}
             )
         )
         back_btn = InlineKeyboardButton(
             text="Back",
             callback_data=self.get_action_callback_data(
                 ACTION_GET_NEW_BILL_KEYBOARD,
-                bill_id
+                {JSON_BILL_FIELD: bill_id}
             )
         )
         return InlineKeyboardMarkup(
@@ -338,6 +388,65 @@ class TelegramBot:
              [del_tax_btn],
              [back_btn]]
         )
+
+    def get_edit_items_keyboard(self, bill_id, trans):
+        kb = self.get_item_buttons(bill_id, ACTION_EDIT_SPECIFIC_ITEM, trans)
+        back_btn = InlineKeyboardButton(
+            text="Back",
+            callback_data=self.get_action_callback_data(
+                ACTION_GET_MODIFY_ITEMS_KEYBOARD,
+                {JSON_BILL_FIELD: bill_id}
+            )
+        )
+        kb.append([back_btn])
+        return InlineKeyboardMarkup(kb)
+
+    def get_item_buttons(self, bill_id, action, trans):
+        keyboard = []
+        items = trans.get_bill_items(bill_id)
+        for item_id, item_name, __ in items:
+            item_btn = InlineKeyboardButton(
+                text=item_name,
+                callback_data=self.get_action_callback_data(
+                    action,
+                    {JSON_BILL_FIELD: bill_id,
+                     JSON_ITEM_FIELD: item_id}
+                )
+            )
+            keyboard.append([item_btn])
+
+        return keyboard
+
+    def get_edit_item_keyboard(self, bill_id, item_id, trans):
+        name, price = trans.get_item(item_id)
+        edit_name_btn = InlineKeyboardButton(
+            text="Edit Name: '{}'".format(name),
+            callback_data=self.get_action_callback_data(
+                ACTION_EDIT_SPECIFIC_ITEM_NAME,
+                {JSON_BILL_FIELD: bill_id,
+                 JSON_ITEM_FIELD: item_id}
+            )
+        )
+        edit_price_btn = InlineKeyboardButton(
+            text="Edit Price: '{:.2f}'".format(price),
+            callback_data=self.get_action_callback_data(
+                ACTION_EDIT_SPECIFIC_ITEM_PRICE,
+                {JSON_BILL_FIELD: bill_id,
+                 JSON_ITEM_FIELD: item_id}
+            )
+        )
+        back_btn = InlineKeyboardButton(
+            text="Back",
+            callback_data=self.get_action_callback_data(
+                ACTION_EDIT_ITEM,
+                {JSON_BILL_FIELD: bill_id}
+            )
+        )
+        return InlineKeyboardMarkup([
+            [edit_name_btn],
+            [edit_price_btn],
+            [back_btn]
+        ])
 
     def ask_for_item(self, bot, cbq, bill_id, trans):
         self.set_session(
@@ -414,7 +523,8 @@ class TelegramBot:
                 msg.chat_id,
                 msg.from_user.id,
                 bill_id,
-                trans
+                trans,
+                keyboard=self.get_modify_items_keyboard(bill_id)
             )
         except ValueError as e:
             print(e)
@@ -428,6 +538,96 @@ class TelegramBot:
     def add_items_img(self, msg, bot, trans, data):
         pass
 
+    def ask_for_edited_item_name(self, bot, cbq, bill_id, item_id, trans):
+        self.set_session(
+            cbq.message.chat_id,
+            cbq.from_user,
+            ACTION_EDIT_SPECIFIC_ITEM_NAME,
+            trans,
+            data={'bill_id': bill_id,
+                  'item_id': item_id}
+        )
+        cbq.answer()
+        bot.sendMessage(
+            chat_id=cbq.message.chat_id,
+            text=REQUEST_EDIT_ITEM_NAME
+        )
+
+    def ask_for_edited_item_price(self, bot, cbq, bill_id, item_id, trans):
+        self.set_session(
+            cbq.message.chat_id,
+            cbq.from_user,
+            ACTION_EDIT_SPECIFIC_ITEM_PRICE,
+            trans,
+            data={'bill_id': bill_id,
+                  'item_id': item_id}
+        )
+        cbq.answer()
+        bot.sendMessage(
+            chat_id=cbq.message.chat_id,
+            text=REQUEST_EDIT_ITEM_PRICE
+        )
+
+    def edit_item_name(self, msg, bot, trans, data):
+        text = msg.text
+        if (text is None or len(text) < 1 or len(text) > 250):
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_INVALID_ITEM_NAME
+            )
+        try:
+            bill_id = data.get('bill_id')
+            if bill_id is None:
+                raise Exception('bill_id is None')
+            item_id = data.get('item_id')
+            if item_id is None:
+                raise Exception('item_id is None')
+            trans.edit_item_name(item_id, text)
+            trans.reset_session(msg.from_user.id, msg.chat_id)
+            return self.send_bill_response(
+                bot,
+                msg.chat_id,
+                msg.from_user.id,
+                bill_id,
+                trans,
+                keyboard=self.get_edit_item_keyboard(bill_id, item_id, trans)
+            )
+        except Exception as e:
+            print(e)
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_SOMETHING_WENT_WRONG
+            )
+
+    def edit_item_price(self, msg, bot, trans, data):
+        text = msg.text
+        try:
+            price = float(text)
+            bill_id = data.get('bill_id')
+            if bill_id is None:
+                raise Exception('bill_id is None')
+            item_id = data.get('item_id')
+            if item_id is None:
+                raise Exception('item_id is None')
+            trans.edit_item_price(item_id, price)
+            trans.reset_session(msg.from_user.id, msg.chat_id)
+            return self.send_bill_response(
+                bot,
+                msg.chat_id,
+                msg.from_user.id,
+                bill_id,
+                trans,
+                keyboard=self.get_edit_item_keyboard(bill_id, item_id, trans)
+            )
+        except ValueError as e:
+            print(e)
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_INVALID_FLOAT_VALUE.format('item price')
+            )
+        except Exception as e:
+            print(e)
+
     def ask_for_tax_name(self, bot, cbq, bill_id, trans):
         self.set_session(
             cbq.message.chat_id,
@@ -436,13 +636,11 @@ class TelegramBot:
             trans,
             data={'bill_id': bill_id}
         )
+        cbq.answer()
         bot.sendMessage(chat_id=cbq.message.chat_id, text=REQUEST_TAX_NAME)
 
-    def get_action_callback_data(self, action, bill_id):
-        data = {
-            JSON_ACTION_FIELD: action,
-            JSON_BILL_FIELD: bill_id
-        }
+    def get_action_callback_data(self, action, data):
+        data[JSON_ACTION_FIELD] = action
         return json.dumps(data)
 
     @staticmethod

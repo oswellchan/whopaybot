@@ -220,6 +220,52 @@ class Transaction:
             self.is_error = True
             raise e
 
+    def get_item(self, item_id):
+        try:
+            self.cursor.execute("""\
+                SELECT i.name, i.price
+                    FROM items i
+                WHERE i.id = %s
+            """, (item_id,)
+            )
+            return self.cursor.fetchone()
+        except Exception as e:
+            utils.print_error()
+            self.is_error = True
+            raise e
+
+    def edit_item_name(self, item_id, name):
+        try:
+            self.cursor.execute("""\
+                UPDATE items SET name = %s
+                WHERE id = %s
+                RETURNING id
+            """, (name, item_id)
+            )
+
+            count = self.cursor.rowcount
+            if count != 1:
+                raise Exception("Updated rows not expected. '{}'".format(count))
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def edit_item_price(self, item_id, price):
+        try:
+            self.cursor.execute("""\
+                UPDATE items SET price = %s
+                WHERE id = %s
+                RETURNING id
+            """, (price, item_id)
+            )
+
+            count = self.cursor.rowcount
+            if count != 1:
+                raise Exception("Updated rows not expected. '{}'".format(count))
+        except Exception as e:
+            self.is_error = True
+            raise e
+
     def get_bill_taxes(self, bill_id, user_id):
         try:
             self.cursor.execute("""\
