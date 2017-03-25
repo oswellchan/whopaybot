@@ -65,20 +65,25 @@ class Transaction:
             self.is_error = True
             raise e
 
-    def add_session(self, chat_id, user_id, action, data=None):
+    def add_session(self, chat_id, user_id, action_type,
+                    action_id, subaction_id, data=None):
         if data is not None:
             data = json.dumps(data)
 
         try:
             self.cursor.execute("""\
-                INSERT INTO sessions (chat_id, user_id, action, data,
-                    updated_at)
-                    VALUES(%s, %s, %s, %s, NOW())
+                INSERT INTO sessions (chat_id, user_id, action_type,
+                    action_id, subaction_id, data, updated_at)
+                    VALUES(%s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT(chat_id, user_id) DO UPDATE SET
-                    chat_id=EXCLUDED.chat_id, user_id=EXCLUDED.user_id,
-                    action=EXCLUDED.action, data=EXCLUDED.data,
+                    chat_id=EXCLUDED.chat_id,
+                    user_id=EXCLUDED.user_id,
+                    action_type=EXCLUDED.action_type,
+                    action_id=EXCLUDED.action_id,
+                    subaction_id=EXCLUDED.subaction_id,
+                    data=EXCLUDED.data,
                     updated_at=EXCLUDED.updated_at;
-            """, (chat_id, user_id, action, data)
+            """, (chat_id, user_id, action_type, action_id, subaction_id, data)
             )
         except Exception as e:
             self.is_error = True
@@ -90,7 +95,8 @@ class Transaction:
         """
         try:
             self.cursor.execute("""\
-                SELECT s.action, s.data FROM sessions s
+                SELECT s.action_type, s.action_id, s.subaction_id,
+                    s.data FROM sessions s
                 WHERE s.chat_id = %s
                     AND s.user_id = %s
                 FOR UPDATE;
@@ -102,13 +108,27 @@ class Transaction:
             if len(rows) > 1:
                 raise Exception('More than 1 action.')
 
-            data = rows[0][1]
+            data = rows[0][3]
             if data is not None:
                 data = json.loads(data)
             else:
                 data = {}
 
-            return rows[0][0], data
+            return rows[0][0], rows[0][1], rows[0][2], data
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def reset_session(self, chat_id, user_id, data=None):
+        try:
+            self.cursor.execute("""\
+                UPDATE sessions
+                SET action_type = NULL, action_id = NULL,
+                    subaction_id = NULL, data = %s
+                WHERE chat_id = %s
+                    AND user_id = %s
+            """, (data, chat_id, user_id)
+            )
         except Exception as e:
             self.is_error = True
             raise e
@@ -153,19 +173,6 @@ class Transaction:
                 INSERT INTO bill_items (bill_id, item_id)
                     VALUES (%s, %s);
             """, (bill_id, item_id)
-            )
-        except Exception as e:
-            self.is_error = True
-            raise e
-
-    def reset_session(self, chat_id, user_id, data=None):
-        try:
-            self.cursor.execute("""\
-                UPDATE sessions
-                    SET action = NULL, data = %s
-                WHERE chat_id = %s
-                    AND user_id = %s
-            """, (data, chat_id, user_id)
             )
         except Exception as e:
             self.is_error = True
