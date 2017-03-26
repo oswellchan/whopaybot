@@ -16,7 +16,7 @@ class Database:
         self.pw = pw
 
     def get_connection(self):
-        return self.Connection(
+        return Connection(
             self.host,
             self.db,
             self.port,
@@ -24,15 +24,16 @@ class Database:
             self.pw
         )
 
-    class Connection:
-        def __init__(self, host, db, port, user, pw):
-            conn = psycopg2.connect(
-                "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(
-                    host, db, user, pw, port
-                )
+
+class Connection:
+    def __init__(self, host, db, port, user, pw):
+        conn = psycopg2.connect(
+            "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(
+                host, db, user, pw, port
             )
-            conn.autocommit = True
-            self.cursor = conn.cursor()
+        )
+        conn.autocommit = True
+        self.cursor = conn.cursor()
 
 
 class Transaction:
@@ -242,11 +243,12 @@ class Transaction:
                     SELECT * FROM items i
                     INNER JOIN bills b on b.id = i.bill_id
                     WHERE i.id = %s
+                    AND b.id = %s
                     AND b.completed_at IS NULL
                     AND b.owner_id = %s
                 )
                 RETURNING id
-            """, (name, item_id, item_id, user_id)
+            """, (name, item_id, item_id, bill_id, user_id)
             )
 
             count = self.cursor.rowcount
@@ -265,16 +267,41 @@ class Transaction:
                     SELECT * FROM items i
                     INNER JOIN bills b on b.id = i.bill_id
                     WHERE i.id = %s
+                    AND b.id = %s
                     AND b.completed_at IS NULL
                     AND b.owner_id = %s
                 )
                 RETURNING id
-            """, (price, item_id, item_id, user_id)
+            """, (price, item_id, item_id, bill_id, user_id)
             )
 
             count = self.cursor.rowcount
             if count != 1:
                 raise Exception("Updated rows not expected. '{}'".format(count))
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def delete_item(self, bill_id, item_id, user_id):
+        try:
+            self.cursor.execute("""\
+                DELETE FROM items
+                WHERE id = %s
+                AND EXISTS(
+                    SELECT * FROM items i
+                    INNER JOIN bills b on b.id = i.bill_id
+                    WHERE i.id = %s
+                    AND b.id = %s
+                    AND b.completed_at IS NULL
+                    AND b.owner_id = %s
+                )
+                RETURNING id
+            """, (item_id, item_id, bill_id, user_id)
+            )
+
+            count = self.cursor.rowcount
+            if count != 1:
+                raise Exception("Deleted rows not expected. '{}'".format(count))
         except Exception as e:
             self.is_error = True
             raise e

@@ -23,6 +23,7 @@ ACTION_GET_NEW_BILL_KB = 10
 ACTION_GET_EDIT_SPECIFIC_ITEM_KB = 11
 ACTION_EDIT_SPECIFIC_ITEM_NAME = 14
 ACTION_EDIT_SPECIFIC_ITEM_PRICE = 15
+ACTION_DELETE_SPECIFIC_ITEM = 16
 
 REQUEST_BILL_NAME = "Send me a name for the new bill you want to create."
 REQUEST_ITEM_NAME = "Okay. Send me the name of the item."
@@ -41,60 +42,64 @@ class BillCreationHandler(ActionHandler):
 
     def __init__(self):
         super().__init__(MODULE_ACTION_TYPE)
-        self.action_map = {
-            ACTION_NEW_BILL:
-                CreateNewBill(
-                    MODULE_ACTION_TYPE,
-                    ACTION_NEW_BILL
-                ),
-            ACTION_GET_NEW_BILL_KB:
-                DisplayNewBillKB(
-                    MODULE_ACTION_TYPE,
-                    ACTION_GET_NEW_BILL_KB
-                ),
-            ACTION_GET_MODIFY_ITEMS_KB:
-                DisplayModifyItemsKB(
-                    MODULE_ACTION_TYPE,
-                    ACTION_GET_MODIFY_ITEMS_KB
-                ),
-            ACTION_GET_MODIFY_TAXES_KB:
-                DisplayModifyTaxesKB(
-                    MODULE_ACTION_TYPE,
-                    ACTION_GET_MODIFY_TAXES_KB
-                ),
-            ACTION_GET_EDIT_ITEM_KB:
-                DisplayEditItemsKB(
-                    MODULE_ACTION_TYPE,
-                    ACTION_GET_EDIT_SPECIFIC_ITEM_KB
-                ),
-            ACTION_GET_EDIT_SPECIFIC_ITEM_KB:
-                DisplayEditSpecificItemKB(
-                    MODULE_ACTION_TYPE,
-                    ACTION_GET_EDIT_SPECIFIC_ITEM_KB
-                ),
-            ACTION_ADD_ITEMS:
-                AddItems(
-                    MODULE_ACTION_TYPE,
-                    ACTION_ADD_ITEMS
-                ),
-            ACTION_EDIT_SPECIFIC_ITEM_NAME:
-                EditItemName(
-                    MODULE_ACTION_TYPE,
-                    ACTION_EDIT_SPECIFIC_ITEM_NAME
-                ),
-            ACTION_EDIT_SPECIFIC_ITEM_PRICE:
-                EditItemPrice(
-                    MODULE_ACTION_TYPE,
-                    ACTION_EDIT_SPECIFIC_ITEM_PRICE
-                )
-        }
 
     def execute(self, bot, update, trans, action_id,
                 subaction_id=0, data=None):
-        action = self.action_map.get(action_id)
-        if action is None:
-            return
-        action.execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_NEW_BILL:
+            return CreateNewBill(
+                MODULE_ACTION_TYPE,
+                ACTION_NEW_BILL
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_GET_NEW_BILL_KB:
+            return DisplayNewBillKB(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_NEW_BILL_KB
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_GET_MODIFY_ITEMS_KB:
+            return DisplayModifyItemsKB(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_MODIFY_ITEMS_KB
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_GET_MODIFY_TAXES_KB:
+            return DisplayModifyTaxesKB(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_MODIFY_TAXES_KB
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_GET_EDIT_ITEM_KB:
+            return DisplayEditItemsKB(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_EDIT_SPECIFIC_ITEM_KB
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_GET_EDIT_SPECIFIC_ITEM_KB:
+            return DisplayEditSpecificItemKB(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_EDIT_SPECIFIC_ITEM_KB
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_ADD_ITEMS:
+            return AddItems(
+                MODULE_ACTION_TYPE,
+                ACTION_ADD_ITEMS
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_EDIT_SPECIFIC_ITEM_NAME:
+            return EditItemName(
+                MODULE_ACTION_TYPE,
+                ACTION_EDIT_SPECIFIC_ITEM_NAME
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_EDIT_SPECIFIC_ITEM_PRICE:
+            return EditItemPrice(
+                MODULE_ACTION_TYPE,
+                ACTION_EDIT_SPECIFIC_ITEM_PRICE
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_GET_DELETE_ITEM_KB:
+            return DisplayDeleteItemsKB(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_DELETE_ITEM_KB
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_DELETE_SPECIFIC_ITEM:
+            return DeleteItem(
+                MODULE_ACTION_TYPE,
+                ACTION_DELETE_SPECIFIC_ITEM
+            ).execute(bot, update, trans, subaction_id, data)
 
 
 class CreateNewBill(Action):
@@ -390,6 +395,32 @@ class DisplayEditSpecificItemKB(Action):
         ])
 
 
+class DisplayDeleteItemsKB(Action):
+    ACTION_DISPLAY_DELETE_ITEMS_KB = 0
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_DISPLAY_DELETE_ITEMS_KB:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            return cbq.edit_message_reply_markup(
+                reply_markup=self.get_delete_items_keyboard(bill_id, trans)
+            )
+
+    @staticmethod
+    def get_delete_items_keyboard(bill_id, trans):
+        kb = get_item_buttons(bill_id, ACTION_DELETE_SPECIFIC_ITEM, trans)
+        back_btn = InlineKeyboardButton(
+            text="Back",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_MODIFY_ITEMS_KB,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        kb.append([back_btn])
+        return InlineKeyboardMarkup(kb)
+
+
 class AddItems(Action):
     ACTION_ASK_FOR_ITEMS = 0
     ACTION_PROCESS_ITEMS = 1
@@ -646,6 +677,34 @@ class EditItemPrice(Action):
             )
         except Exception as e:
             print(e)
+
+
+class DeleteItem(Action):
+    ACTION_DELETE_ITEM = 0
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_DELETE_ITEM:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            item_id = data.get(const.JSON_ITEM_ID)
+            return self.delete_item(
+                bot,
+                cbq,
+                bill_id,
+                item_id,
+                trans
+            )
+
+    def delete_item(self, bot, cbq, bill_id, item_id, trans):
+        trans.delete_item(bill_id, item_id, cbq.from_user.id)
+        trans.reset_session(cbq.from_user.id, cbq.message.chat_id)
+        return cbq.edit_message_text(
+            text=get_bill_text(bill_id, cbq.from_user.id, trans),
+            parse_mode=ParseMode.HTML,
+            reply_markup=DisplayDeleteItemsKB.get_delete_items_keyboard(
+                bill_id, trans
+            )
+        )
 
 
 class BillError(Exception):

@@ -1,4 +1,5 @@
 from telegram.ext import Updater, Filters, CommandHandler, MessageHandler, CallbackQueryHandler
+from telegram.ext.dispatcher import run_async
 from database import Transaction
 from action_handlers import bill_handler
 import json
@@ -32,19 +33,12 @@ class TelegramBot:
         message_handler = MessageHandler(Filters.all, self.handle_all_msg)
         dispatcher.add_handler(message_handler)
 
-        # Action handlers
-        self.init_action_handlers()
-
-    def init_action_handlers(self):
-        b_handler = bill_handler.BillCreationHandler()
-        self.action_handlers_map = {
-            b_handler.action_type: b_handler
-        }
-
+    @run_async
     def start(self, bot, update):
         # TODO: make command list screen
         bot.sendMessage(chat_id=update.message.chat_id, text="Start screen")
 
+    @run_async
     def new_bill(self, bot, update):
         # only allow private message
         try:
@@ -60,6 +54,7 @@ class TelegramBot:
         except Exception as e:
             print(e)
 
+    @run_async
     def handle_all_msg(self, bot, update):
         try:
             if update.message.chat.type != PRIVATE_CHAT:
@@ -72,7 +67,7 @@ class TelegramBot:
                         msg.chat_id,
                         msg.from_user.id,
                     )
-                    handler = self.action_handlers_map[act_type]
+                    handler = self.get_action_handler(act_type)
                     return handler.execute(
                         bot, update, trans, act_id, subact_id, data
                     )
@@ -81,6 +76,7 @@ class TelegramBot:
         except Exception as e:
             print(e)
 
+    @run_async
     def handle_all_callback(self, bot, update):
         try:
             cbq = update.callback_query
@@ -101,12 +97,18 @@ class TelegramBot:
 
                 if action_type is None:
                     return cbq.answer('nothing')
-                handler = self.action_handlers_map[action_type]
+                handler = self.get_action_handler(action_type)
                 return handler.execute(
                     bot, update, trans, action_id, 0, payload
                 )
         except Exception as e:
             print(e)
+
+    def get_action_handler(self, action_type):
+        if action_type == bill_handler.MODULE_ACTION_TYPE:
+            return bill_handler.BillCreationHandler()
+
+        raise Exception("Action type '{}' unknown".format(action_type))
 
 
 class BillError(Exception):
