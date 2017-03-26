@@ -32,7 +32,7 @@ class TelegramBot:
         # Handle all replies
         message_handler = MessageHandler(Filters.all, self.handle_all_msg)
         dispatcher.add_handler(message_handler)
-
+    
     @run_async
     def start(self, bot, update):
         # TODO: make command list screen
@@ -53,7 +53,7 @@ class TelegramBot:
                 )
         except Exception as e:
             print(e)
-
+    
     @run_async
     def handle_all_msg(self, bot, update):
         try:
@@ -75,7 +75,7 @@ class TelegramBot:
                     print(e)
         except Exception as e:
             print(e)
-
+    
     @run_async
     def handle_all_callback(self, bot, update):
         try:
