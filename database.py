@@ -158,22 +158,14 @@ class Transaction:
     def add_item(self, bill_id, item_name, price):
         try:
             self.cursor.execute("""\
-                INSERT INTO items (name, price)
-                    VALUES (%s, %s)
+                INSERT INTO items (bill_id, name, price)
+                    VALUES (%s, %s, %s)
                 RETURNING id;
-            """, (item_name, price)
+            """, (bill_id, item_name, price)
             )
 
             if self.cursor.rowcount < 1:
                 raise Exception('Add item failed')
-
-            item = self.cursor.fetchone()
-            item_id = item[0]
-            self.cursor.execute("""\
-                INSERT INTO bill_items (bill_id, item_id)
-                    VALUES (%s, %s);
-            """, (bill_id, item_id)
-            )
         except Exception as e:
             self.is_error = True
             raise e
@@ -217,8 +209,8 @@ class Transaction:
             self.cursor.execute("""\
                 SELECT i.id, i.name, i.price
                     FROM items i
-                INNER JOIN bill_items bi ON bi.item_id = i.id
-                WHERE bi.bill_id = %s
+                WHERE i.bill_id = %s
+                ORDER BY i.created_at
             """, (bill_id,)
             )
             return self.cursor.fetchall()
@@ -241,13 +233,20 @@ class Transaction:
             self.is_error = True
             raise e
 
-    def edit_item_name(self, item_id, name):
+    def edit_item_name(self, bill_id, item_id, user_id, name):
         try:
             self.cursor.execute("""\
                 UPDATE items SET name = %s
                 WHERE id = %s
+                AND EXISTS(
+                    SELECT * FROM items i
+                    INNER JOIN bills b on b.id = i.bill_id
+                    WHERE i.id = %s
+                    AND b.completed_at IS NULL
+                    AND b.owner_id = %s
+                )
                 RETURNING id
-            """, (name, item_id)
+            """, (name, item_id, item_id, user_id)
             )
 
             count = self.cursor.rowcount
@@ -257,13 +256,20 @@ class Transaction:
             self.is_error = True
             raise e
 
-    def edit_item_price(self, item_id, price):
+    def edit_item_price(self, bill_id, item_id, user_id, price):
         try:
             self.cursor.execute("""\
                 UPDATE items SET price = %s
                 WHERE id = %s
+                AND EXISTS(
+                    SELECT * FROM items i
+                    INNER JOIN bills b on b.id = i.bill_id
+                    WHERE i.id = %s
+                    AND b.completed_at IS NULL
+                    AND b.owner_id = %s
+                )
                 RETURNING id
-            """, (price, item_id)
+            """, (price, item_id, item_id, user_id)
             )
 
             count = self.cursor.rowcount

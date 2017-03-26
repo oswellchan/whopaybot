@@ -555,7 +555,7 @@ class EditItemName(Action):
             item_id = data.get('item_id')
             if item_id is None:
                 raise Exception('item_id is None')
-            trans.edit_item_name(item_id, text)
+            trans.edit_item_name(bill_id, item_id, msg.from_user.id, text)
             trans.reset_session(msg.from_user.id, msg.chat_id)
             return send_bill_response(
                 bot,
@@ -624,7 +624,7 @@ class EditItemPrice(Action):
             item_id = data.get('item_id')
             if item_id is None:
                 raise Exception('item_id is None')
-            trans.edit_item_price(item_id, price)
+            trans.edit_item_price(bill_id, item_id, msg.from_user.id, price)
             trans.reset_session(msg.from_user.id, msg.chat_id)
             return send_bill_response(
                 bot,
