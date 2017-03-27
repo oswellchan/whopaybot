@@ -181,7 +181,7 @@ class Transaction:
         try:
             bill['title'] = self.get_bill_name(bill_id, user_id)
             bill['items'] = self.get_bill_items(bill_id)
-            bill['taxes'] = self.get_bill_taxes(bill_id, user_id)
+            bill['taxes'] = self.get_bill_taxes(bill_id)
 
             return bill
         except Exception as e:
@@ -306,18 +306,118 @@ class Transaction:
             self.is_error = True
             raise e
 
-    def get_bill_taxes(self, bill_id, user_id):
+    def get_bill_taxes(self, bill_id):
+        try:
+            self.cursor.execute("""\
+                SELECT bt.id, bt.title, bt.amount
+                    FROM bill_taxes bt
+                WHERE bt.bill_id = %s
+                ORDER BY bt.created_at
+            """, (bill_id,)
+            )
+
+            return self.cursor.fetchall()
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def add_tax(self, bill_id, tax_name, amt):
+        try:
+            self.cursor.execute("""\
+                INSERT INTO bill_taxes (bill_id, title, amount)
+                    VALUES (%s, %s, %s)
+                RETURNING id;
+            """, (bill_id, tax_name, amt)
+            )
+
+            if self.cursor.rowcount < 1:
+                raise Exception('Add tax failed')
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def get_tax(self, tax_id):
         try:
             self.cursor.execute("""\
                 SELECT bt.title, bt.amount
                     FROM bill_taxes bt
-                INNER JOIN bills b ON b.id = bt.bill_id
-                WHERE b.id = %s
+                WHERE bt.id = %s
+            """, (tax_id,)
+            )
+            return self.cursor.fetchone()
+        except Exception as e:
+            utils.print_error()
+            self.is_error = True
+            raise e
+
+    def edit_tax_name(self, bill_id, tax_id, user_id, name):
+        try:
+            self.cursor.execute("""\
+                UPDATE bill_taxes bt SET title = %s
+                WHERE id = %s
+                AND EXISTS(
+                    SELECT * FROM bill_taxes bt
+                    INNER JOIN bills b on b.id = bt.bill_id
+                    WHERE bt.id = %s
+                    AND b.id = %s
+                    AND b.completed_at IS NULL
                     AND b.owner_id = %s
-            """, (bill_id, user_id)
+                )
+                RETURNING id
+            """, (name, tax_id, tax_id, bill_id, user_id)
             )
 
-            return self.cursor.fetchall()
+            count = self.cursor.rowcount
+            if count != 1:
+                raise Exception("Updated rows not expected. '{}'".format(count))
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def edit_tax_amt(self, bill_id, tax_id, user_id, amt):
+        try:
+            self.cursor.execute("""\
+                UPDATE bill_taxes SET amount = %s
+                WHERE id = %s
+                AND EXISTS(
+                    SELECT * FROM bill_taxes bt
+                    INNER JOIN bills b on b.id = bt.bill_id
+                    WHERE bt.id = %s
+                    AND b.id = %s
+                    AND b.completed_at IS NULL
+                    AND b.owner_id = %s
+                )
+                RETURNING id
+            """, (amt, tax_id, tax_id, bill_id, user_id)
+            )
+
+            count = self.cursor.rowcount
+            if count != 1:
+                raise Exception("Updated rows not expected. '{}'".format(count))
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def delete_tax(self, bill_id, tax_id, user_id):
+        try:
+            self.cursor.execute("""\
+                DELETE FROM bill_taxes
+                WHERE id = %s
+                AND EXISTS(
+                    SELECT * FROM bill_taxes bt
+                    INNER JOIN bills b on b.id = bt.bill_id
+                    WHERE bt.id = %s
+                    AND b.id = %s
+                    AND b.completed_at IS NULL
+                    AND b.owner_id = %s
+                )
+                RETURNING id
+            """, (tax_id, tax_id, bill_id, user_id)
+            )
+
+            count = self.cursor.rowcount
+            if count != 1:
+                raise Exception("Deleted rows not expected. '{}'".format(count))
         except Exception as e:
             self.is_error = True
             raise e

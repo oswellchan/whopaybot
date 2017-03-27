@@ -75,7 +75,7 @@ class TelegramBot:
                     print(e)
         except Exception as e:
             print(e)
-    
+
     @run_async
     def handle_all_callback(self, bot, update):
         try:

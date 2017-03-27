@@ -17,23 +17,32 @@ ACTION_ADD_ITEMS = 4
 ACTION_GET_EDIT_ITEM_KB = 5
 ACTION_GET_DELETE_ITEM_KB = 6
 ACTION_ADD_TAX = 7
-ACTION_EDIT_TAX = 8
-ACTION_DELETE_TAX = 9
+ACTION_GET_EDIT_TAX_KB = 8
+ACTION_GET_DELETE_TAX_KB = 9
 ACTION_GET_NEW_BILL_KB = 10
 ACTION_GET_EDIT_SPECIFIC_ITEM_KB = 11
 ACTION_EDIT_SPECIFIC_ITEM_NAME = 14
 ACTION_EDIT_SPECIFIC_ITEM_PRICE = 15
 ACTION_DELETE_SPECIFIC_ITEM = 16
+ACTION_GET_EDIT_SPECIFIC_TAX_KB = 17
+ACTION_EDIT_SPECIFIC_TAX_NAME = 18
+ACTION_EDIT_SPECIFIC_TAX_AMT = 19
+ACTION_DELETE_SPECIFIC_TAX = 20
 
 REQUEST_BILL_NAME = "Send me a name for the new bill you want to create."
 REQUEST_ITEM_NAME = "Okay. Send me the name of the item."
 REQUEST_ITEM_PRICE = "Great! Now send me the price of the item. Leave out the currency and provide only the value (e.g. 8.00 or 8)."
 REQUEST_EDIT_ITEM_NAME = "Send me the new name of the item."
 REQUEST_EDIT_ITEM_PRICE = "Send me the new price of the item. Leave out the currency and provide only the value (e.g. 8.00 or 8)."
+REQUEST_TAX_NAME = "Send me the name of the tax."
+REQUEST_TAX_AMT = "Great! Now send me the tax amount in whole numbers. Leave out the percentage sign (e.g. 7 or 7.00)."
+REQUEST_EDIT_TAX_NAME = "Send me the new name of the tax."
+REQUEST_EDIT_TAX_AMT = "Send me the new tax amount in whole numbers. Leave out the percentage sign (e.g. 7 or 7.00)."
 
 ERROR_INVALID_BILL_NAME = "Sorry, the bill name provided is invalid. Name of the bill can only be 250 characters long. Please try again."
 ERROR_SOMETHING_WENT_WRONG = "Sorry, an error has occurred. Please try again in a few moments."
 ERROR_INVALID_ITEM_NAME = "Sorry, the item name provided is invalid. Name of the item can only be 250 characters long. Please try again."
+ERROR_INVALID_TAX_NAME = "Sorry, the tax name provided is invalid. Name of the item can only be 250 characters long. Please try again."
 ERROR_INVALID_FLOAT_VALUE = "Sorry, the {} provided is invalid. Value provided should be strictly digits only or with an optional decimal point (e.g. 8.00 or 8)."
 
 
@@ -68,7 +77,7 @@ class BillCreationHandler(ActionHandler):
         if action_id == ACTION_GET_EDIT_ITEM_KB:
             return DisplayEditItemsKB(
                 MODULE_ACTION_TYPE,
-                ACTION_GET_EDIT_SPECIFIC_ITEM_KB
+                ACTION_GET_EDIT_ITEM_KB
             ).execute(bot, update, trans, subaction_id, data)
         if action_id == ACTION_GET_EDIT_SPECIFIC_ITEM_KB:
             return DisplayEditSpecificItemKB(
@@ -99,6 +108,41 @@ class BillCreationHandler(ActionHandler):
             return DeleteItem(
                 MODULE_ACTION_TYPE,
                 ACTION_DELETE_SPECIFIC_ITEM
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_GET_EDIT_TAX_KB:
+            return DisplayEditTaxesKB(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_EDIT_TAX_KB
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_GET_EDIT_SPECIFIC_TAX_KB:
+            return DisplayEditSpecificTaxKB(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_EDIT_SPECIFIC_TAX_KB
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_ADD_TAX:
+            return AddTax(
+                MODULE_ACTION_TYPE,
+                ACTION_ADD_TAX
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_EDIT_SPECIFIC_TAX_NAME:
+            return EditTaxName(
+                MODULE_ACTION_TYPE,
+                ACTION_EDIT_SPECIFIC_TAX_NAME
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_EDIT_SPECIFIC_TAX_AMT:
+            return EditTaxAmt(
+                MODULE_ACTION_TYPE,
+                ACTION_EDIT_SPECIFIC_TAX_AMT
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_GET_DELETE_TAX_KB:
+            return DisplayDeleteTaxesKB(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_DELETE_TAX_KB
+            ).execute(bot, update, trans, subaction_id, data)
+        if action_id == ACTION_DELETE_SPECIFIC_TAX:
+            return DeleteTax(
+                MODULE_ACTION_TYPE,
+                ACTION_DELETE_SPECIFIC_TAX
             ).execute(bot, update, trans, subaction_id, data)
 
 
@@ -289,7 +333,7 @@ class DisplayModifyTaxesKB(Action):
             text="Edit tax",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
-                ACTION_EDIT_TAX,
+                ACTION_GET_EDIT_TAX_KB,
                 {const.JSON_BILL_ID: bill_id}
             )
         )
@@ -297,7 +341,7 @@ class DisplayModifyTaxesKB(Action):
             text="Delete tax",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
-                ACTION_DELETE_TAX,
+                ACTION_GET_DELETE_TAX_KB,
                 {const.JSON_BILL_ID: bill_id}
             )
         )
@@ -421,6 +465,110 @@ class DisplayDeleteItemsKB(Action):
         return InlineKeyboardMarkup(kb)
 
 
+class DisplayEditTaxesKB(Action):
+    ACTION_DISPLAY_EDIT_TAXES_KB = 0
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_DISPLAY_EDIT_TAXES_KB:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            return cbq.edit_message_reply_markup(
+                reply_markup=self.get_edit_taxes_keyboard(bill_id, trans)
+            )
+
+    @staticmethod
+    def get_edit_taxes_keyboard(bill_id, trans):
+        kb = get_tax_buttons(bill_id, ACTION_GET_EDIT_SPECIFIC_TAX_KB, trans)
+        back_btn = InlineKeyboardButton(
+            text="Back",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_MODIFY_TAXES_KB,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        kb.append([back_btn])
+        return InlineKeyboardMarkup(kb)
+
+
+class DisplayEditSpecificTaxKB(Action):
+    ACTION_DISPLAY_EDIT_SPECIFIC_TAX_KB = 0
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_DISPLAY_EDIT_SPECIFIC_TAX_KB:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            tax_id = data.get(const.JSON_TAX_ID)
+            return cbq.edit_message_reply_markup(
+                reply_markup=self.get_edit_tax_keyboard(
+                    bill_id,
+                    tax_id,
+                    trans
+                )
+            )
+
+    @staticmethod
+    def get_edit_tax_keyboard(bill_id, tax_id, trans):
+        name, amt = trans.get_tax(tax_id)
+        edit_name_btn = InlineKeyboardButton(
+            text="Edit Name: '{}'".format(name),
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_EDIT_SPECIFIC_TAX_NAME,
+                {const.JSON_BILL_ID: bill_id,
+                 const.JSON_TAX_ID: tax_id}
+            )
+        )
+        edit_amt_btn = InlineKeyboardButton(
+            text="Edit Amount: '{:.2f}'".format(amt),
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_EDIT_SPECIFIC_TAX_AMT,
+                {const.JSON_BILL_ID: bill_id,
+                 const.JSON_TAX_ID: tax_id}
+            )
+        )
+        back_btn = InlineKeyboardButton(
+            text="Back",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_EDIT_TAX_KB,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        return InlineKeyboardMarkup([
+            [edit_name_btn],
+            [edit_amt_btn],
+            [back_btn]
+        ])
+
+
+class DisplayDeleteTaxesKB(Action):
+    ACTION_DISPLAY_DELETE_TAXES_KB = 0
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_DISPLAY_DELETE_TAXES_KB:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            return cbq.edit_message_reply_markup(
+                reply_markup=self.get_delete_taxes_keyboard(bill_id, trans)
+            )
+
+    @staticmethod
+    def get_delete_taxes_keyboard(bill_id, trans):
+        kb = get_tax_buttons(bill_id, ACTION_DELETE_SPECIFIC_TAX, trans)
+        back_btn = InlineKeyboardButton(
+            text="Back",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_MODIFY_TAXES_KB,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        kb.append([back_btn])
+        return InlineKeyboardMarkup(kb)
+
+
 class AddItems(Action):
     ACTION_ASK_FOR_ITEMS = 0
     ACTION_PROCESS_ITEMS = 1
@@ -442,8 +590,8 @@ class AddItems(Action):
         self.set_session(
             cbq.message.chat_id,
             cbq.from_user,
-            MODULE_ACTION_TYPE,
-            ACTION_ADD_ITEMS,
+            self.action_type,
+            self.action_id,
             self.ACTION_PROCESS_ITEMS,
             trans,
             data={'bill_id': bill_id}
@@ -500,6 +648,12 @@ class AddItems(Action):
         )
 
     def add_item_price(self, bot, msg, trans, data):
+        if not Filters.text.filter(msg):
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_INVALID_FLOAT_VALUE.format('item price')
+            )
+
         text = msg.text
 
         try:
@@ -573,6 +727,12 @@ class EditItemName(Action):
         )
 
     def edit_item_name(self, bot, msg, trans, data):
+        if not Filters.text.filter(msg):
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_INVALID_ITEM_NAME
+            )
+
         text = msg.text
         if (text is None or len(text) < 1 or len(text) > 250):
             return bot.sendMessage(
@@ -646,6 +806,12 @@ class EditItemPrice(Action):
         )
 
     def edit_item_price(self, bot, msg, trans, data):
+        if not Filters.text.filter(msg):
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_INVALID_FLOAT_VALUE.format('item price')
+            )
+
         text = msg.text
         try:
             price = float(text)
@@ -707,6 +873,293 @@ class DeleteItem(Action):
         )
 
 
+class AddTax(Action):
+    ACTION_ASK_FOR_TAX = 0
+    ACTION_ADD_TAX_NAME = 1
+    ACTION_ADD_TAX_AMT = 2
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_ASK_FOR_TAX:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            return self.ask_for_tax(bot, cbq, bill_id, trans)
+
+        if subaction_id == self.ACTION_ADD_TAX_NAME:
+            return self.add_tax_name(bot, update.message, trans, data)
+
+        if subaction_id == self.ACTION_ADD_TAX_AMT:
+            return self.add_tax_amt(bot, update.message, trans, data)
+
+    def ask_for_tax(self, bot, cbq, bill_id, trans):
+        self.set_session(
+            cbq.message.chat_id,
+            cbq.from_user,
+            self.action_type,
+            self.action_id,
+            self.ACTION_ADD_TAX_NAME,
+            trans,
+            data={'bill_id': bill_id}
+        )
+        cbq.answer()
+        bot.sendMessage(chat_id=cbq.message.chat_id, text=REQUEST_TAX_NAME)
+
+    def add_tax_name(self, bot, msg, trans, data):
+        try:
+            if not Filters.text.filter(msg):
+                raise BillError(ERROR_INVALID_TAX_NAME)
+
+            text = msg.text
+            if (text is None or len(text) < 1 or len(text) > 250):
+                return bot.sendMessage(
+                    chat_id=msg.chat_id,
+                    text=ERROR_INVALID_TAX_NAME
+                )
+
+            data['tax_name'] = text
+            self.set_session(
+                msg.chat_id,
+                msg.from_user,
+                self.action_type,
+                self.action_id,
+                self.ACTION_ADD_TAX_AMT,
+                trans,
+                data=data
+            )
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=REQUEST_TAX_AMT
+            )
+        except BillError as e:
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=str(e)
+            )
+        except Exception as e:
+            print(e)
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_SOMETHING_WENT_WRONG
+            )
+
+    def add_tax_amt(self, bot, msg, trans, data):
+        try:
+            if not Filters.text.filter(msg):
+                raise BillError(ERROR_INVALID_TAX_NAME)
+
+            text = msg.text
+            amt = float(text)
+            bill_id = data.get('bill_id')
+            if bill_id is None:
+                raise Exception('bill_id is None')
+            tax_name = data.get('tax_name')
+            if tax_name is None:
+                raise Exception('tax_name is None')
+            trans.add_tax(bill_id, tax_name, amt)
+            trans.reset_session(msg.from_user.id, msg.chat_id)
+            return send_bill_response(
+                bot,
+                msg.chat_id,
+                msg.from_user.id,
+                bill_id,
+                trans,
+                keyboard=DisplayModifyTaxesKB.get_modify_taxes_keyboard(
+                    bill_id
+                )
+            )
+        except (ValueError, BillError) as e:
+            print(e)
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_INVALID_FLOAT_VALUE.format('tax amount')
+            )
+        except Exception as e:
+            print(e)
+
+
+class EditTaxName(Action):
+    ACTION_ASK_FOR_TAX_NAME = 0
+    ACTION_UPDATE_TAX_NAME = 1
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_ASK_FOR_TAX_NAME:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            tax_id = data.get(const.JSON_TAX_ID)
+            return self.ask_for_edited_tax_name(
+                bot,
+                cbq,
+                bill_id,
+                tax_id,
+                trans
+            )
+
+        if subaction_id == self.ACTION_UPDATE_TAX_NAME:
+            return self.edit_tax_name(bot, update.message, trans, data)
+
+    def ask_for_edited_tax_name(self, bot, cbq, bill_id, tax_id, trans):
+        self.set_session(
+            cbq.message.chat_id,
+            cbq.from_user,
+            self.action_type,
+            self.action_id,
+            self.ACTION_UPDATE_TAX_NAME,
+            trans,
+            data={'bill_id': bill_id,
+                  'tax_id': tax_id}
+        )
+        cbq.answer()
+        bot.sendMessage(
+            chat_id=cbq.message.chat_id,
+            text=REQUEST_EDIT_TAX_NAME
+        )
+
+    def edit_tax_name(self, bot, msg, trans, data):
+        if not Filters.text.filter(msg):
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_INVALID_TAX_NAME
+            )
+
+        text = msg.text
+        if (text is None or len(text) < 1 or len(text) > 250):
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_INVALID_TAX_NAME
+            )
+        try:
+            bill_id = data.get('bill_id')
+            if bill_id is None:
+                raise Exception('bill_id is None')
+            tax_id = data.get('tax_id')
+            if tax_id is None:
+                raise Exception('tax_id is None')
+            trans.edit_tax_name(bill_id, tax_id, msg.from_user.id, text)
+            trans.reset_session(msg.from_user.id, msg.chat_id)
+            return send_bill_response(
+                bot,
+                msg.chat_id,
+                msg.from_user.id,
+                bill_id,
+                trans,
+                keyboard=DisplayEditSpecificTaxKB.get_edit_tax_keyboard(
+                    bill_id,
+                    tax_id,
+                    trans
+                )
+            )
+        except Exception as e:
+            print(e)
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_SOMETHING_WENT_WRONG
+            )
+
+
+class EditTaxAmt(Action):
+    ACTION_ASK_FOR_TAX_AMT = 0
+    ACTION_UPDATE_TAX_AMT = 1
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_ASK_FOR_TAX_AMT:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            tax_id = data.get(const.JSON_TAX_ID)
+            return self.ask_for_edited_tax_amt(
+                bot,
+                cbq,
+                bill_id,
+                tax_id,
+                trans
+            )
+
+        if subaction_id == self.ACTION_UPDATE_TAX_AMT:
+            return self.edit_tax_amt(bot, update.message, trans, data)
+
+    def ask_for_edited_tax_amt(self, bot, cbq, bill_id, tax_id, trans):
+        self.set_session(
+            cbq.message.chat_id,
+            cbq.from_user,
+            self.action_type,
+            self.action_id,
+            self.ACTION_UPDATE_TAX_AMT,
+            trans,
+            data={'bill_id': bill_id,
+                  'tax_id': tax_id}
+        )
+        cbq.answer()
+        bot.sendMessage(
+            chat_id=cbq.message.chat_id,
+            text=REQUEST_EDIT_TAX_AMT
+        )
+
+    def edit_tax_amt(self, bot, msg, trans, data):
+        if not Filters.text.filter(msg):
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_INVALID_FLOAT_VALUE.format('tax amount')
+            )
+
+        text = msg.text
+        try:
+            amt = float(text)
+            bill_id = data.get('bill_id')
+            if bill_id is None:
+                raise Exception('bill_id is None')
+            tax_id = data.get('tax_id')
+            if tax_id is None:
+                raise Exception('item_id is None')
+            trans.edit_tax_amt(bill_id, tax_id, msg.from_user.id, amt)
+            trans.reset_session(msg.from_user.id, msg.chat_id)
+            return send_bill_response(
+                bot,
+                msg.chat_id,
+                msg.from_user.id,
+                bill_id,
+                trans,
+                keyboard=DisplayEditSpecificTaxKB.get_edit_tax_keyboard(
+                    bill_id,
+                    tax_id,
+                    trans
+                )
+            )
+        except ValueError as e:
+            print(e)
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=ERROR_INVALID_FLOAT_VALUE.format('tax amount')
+            )
+        except Exception as e:
+            print(e)
+
+
+class DeleteTax(Action):
+    ACTION_DELETE_TAX = 0
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_DELETE_TAX:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            tax_id = data.get(const.JSON_TAX_ID)
+            return self.delete_tax(
+                bot,
+                cbq,
+                bill_id,
+                tax_id,
+                trans
+            )
+
+    def delete_item(self, bot, cbq, bill_id, tax_id, trans):
+        trans.delete_tax(bill_id, tax_id, cbq.from_user.id)
+        trans.reset_session(cbq.from_user.id, cbq.message.chat_id)
+        return cbq.edit_message_text(
+            text=get_bill_text(bill_id, cbq.from_user.id, trans),
+            parse_mode=ParseMode.HTML,
+            reply_markup=DisplayDeleteTaxesKB.get_delete_taxes_keyboard(
+                bill_id, trans
+            )
+        )
+
+
 class BillError(Exception):
     pass
 
@@ -746,10 +1199,10 @@ def get_bill_text(bill_id, user_id, trans):
         bill_taxes = bill.get('taxes')
         taxes_text = []
         if bill_taxes is not None:
-            for title, tax in bill_taxes:
+            for __, title, tax in bill_taxes:
                 total += (tax * total / 100)
                 taxes_text.append(const.EMOJI_TAX + ' ' + title +
-                                  ': ' + tax + '%')
+                                  ': ' + '{:.2f}'.format(tax) + '%')
 
         text = title_text + '\n\n' + '\n'.join(items_text)
         if len(taxes_text) > 0:
@@ -775,5 +1228,23 @@ def get_item_buttons(bill_id, action, trans):
             )
         )
         keyboard.append([item_btn])
+
+    return keyboard
+
+
+def get_tax_buttons(bill_id, action, trans):
+    keyboard = []
+    taxes = trans.get_bill_taxes(bill_id)
+    for tax_id, tax_name, __ in taxes:
+        tax_btn = InlineKeyboardButton(
+            text=tax_name,
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                action,
+                {const.JSON_BILL_ID: bill_id,
+                 const.JSON_TAX_ID: tax_id}
+            )
+        )
+        keyboard.append([tax_btn])
 
     return keyboard
