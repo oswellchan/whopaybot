@@ -4,6 +4,7 @@ from telegram.inlinekeyboardbutton import InlineKeyboardButton
 from telegram.parsemode import ParseMode
 
 from action_handlers.action_handler import ActionHandler, Action
+from action_handlers import manage_bill_handler
 import constants as const
 import utils
 
@@ -54,101 +55,55 @@ class BillCreationHandler(ActionHandler):
 
     def execute(self, bot, update, trans, action_id,
                 subaction_id=0, data=None):
+        action = None
         if action_id == ACTION_NEW_BILL:
-            return CreateNewBill(
-                MODULE_ACTION_TYPE,
-                ACTION_NEW_BILL
-            ).execute(bot, update, trans, subaction_id, data)
+            action = CreateNewBill()
         if action_id == ACTION_GET_NEW_BILL_KB:
-            return DisplayNewBillKB(
-                MODULE_ACTION_TYPE,
-                ACTION_GET_NEW_BILL_KB
-            ).execute(bot, update, trans, subaction_id, data)
+            action = DisplayNewBillKB()
         if action_id == ACTION_GET_MODIFY_ITEMS_KB:
-            return DisplayModifyItemsKB(
-                MODULE_ACTION_TYPE,
-                ACTION_GET_MODIFY_ITEMS_KB
-            ).execute(bot, update, trans, subaction_id, data)
+            action = DisplayModifyItemsKB()
         if action_id == ACTION_GET_MODIFY_TAXES_KB:
-            return DisplayModifyTaxesKB(
-                MODULE_ACTION_TYPE,
-                ACTION_GET_MODIFY_TAXES_KB
-            ).execute(bot, update, trans, subaction_id, data)
+            action = DisplayModifyTaxesKB()
         if action_id == ACTION_GET_EDIT_ITEM_KB:
-            return DisplayEditItemsKB(
-                MODULE_ACTION_TYPE,
-                ACTION_GET_EDIT_ITEM_KB
-            ).execute(bot, update, trans, subaction_id, data)
+            action = DisplayEditItemsKB()
         if action_id == ACTION_GET_EDIT_SPECIFIC_ITEM_KB:
-            return DisplayEditSpecificItemKB(
-                MODULE_ACTION_TYPE,
-                ACTION_GET_EDIT_SPECIFIC_ITEM_KB
-            ).execute(bot, update, trans, subaction_id, data)
-        if action_id == ACTION_ADD_ITEMS:
-            return AddItems(
-                MODULE_ACTION_TYPE,
-                ACTION_ADD_ITEMS
-            ).execute(bot, update, trans, subaction_id, data)
-        if action_id == ACTION_EDIT_SPECIFIC_ITEM_NAME:
-            return EditItemName(
-                MODULE_ACTION_TYPE,
-                ACTION_EDIT_SPECIFIC_ITEM_NAME
-            ).execute(bot, update, trans, subaction_id, data)
-        if action_id == ACTION_EDIT_SPECIFIC_ITEM_PRICE:
-            return EditItemPrice(
-                MODULE_ACTION_TYPE,
-                ACTION_EDIT_SPECIFIC_ITEM_PRICE
-            ).execute(bot, update, trans, subaction_id, data)
+            action = DisplayEditSpecificItemKB()
         if action_id == ACTION_GET_DELETE_ITEM_KB:
-            return DisplayDeleteItemsKB(
-                MODULE_ACTION_TYPE,
-                ACTION_GET_DELETE_ITEM_KB
-            ).execute(bot, update, trans, subaction_id, data)
-        if action_id == ACTION_DELETE_SPECIFIC_ITEM:
-            return DeleteItem(
-                MODULE_ACTION_TYPE,
-                ACTION_DELETE_SPECIFIC_ITEM
-            ).execute(bot, update, trans, subaction_id, data)
+            action = DisplayDeleteItemsKB()
         if action_id == ACTION_GET_EDIT_TAX_KB:
-            return DisplayEditTaxesKB(
-                MODULE_ACTION_TYPE,
-                ACTION_GET_EDIT_TAX_KB
-            ).execute(bot, update, trans, subaction_id, data)
+            action = DisplayEditTaxesKB()
         if action_id == ACTION_GET_EDIT_SPECIFIC_TAX_KB:
-            return DisplayEditSpecificTaxKB(
-                MODULE_ACTION_TYPE,
-                ACTION_GET_EDIT_SPECIFIC_TAX_KB
-            ).execute(bot, update, trans, subaction_id, data)
-        if action_id == ACTION_ADD_TAX:
-            return AddTax(
-                MODULE_ACTION_TYPE,
-                ACTION_ADD_TAX
-            ).execute(bot, update, trans, subaction_id, data)
-        if action_id == ACTION_EDIT_SPECIFIC_TAX_NAME:
-            return EditTaxName(
-                MODULE_ACTION_TYPE,
-                ACTION_EDIT_SPECIFIC_TAX_NAME
-            ).execute(bot, update, trans, subaction_id, data)
-        if action_id == ACTION_EDIT_SPECIFIC_TAX_AMT:
-            return EditTaxAmt(
-                MODULE_ACTION_TYPE,
-                ACTION_EDIT_SPECIFIC_TAX_AMT
-            ).execute(bot, update, trans, subaction_id, data)
+            action = DisplayEditSpecificTaxKB()
         if action_id == ACTION_GET_DELETE_TAX_KB:
-            return DisplayDeleteTaxesKB(
-                MODULE_ACTION_TYPE,
-                ACTION_GET_DELETE_TAX_KB
-            ).execute(bot, update, trans, subaction_id, data)
+            action = DisplayDeleteTaxesKB()
+        if action_id == ACTION_ADD_ITEMS:
+            action = AddItems()
+        if action_id == ACTION_EDIT_SPECIFIC_ITEM_NAME:
+            action = EditItemName()
+        if action_id == ACTION_EDIT_SPECIFIC_ITEM_PRICE:
+            action = EditItemPrice()
+        if action_id == ACTION_DELETE_SPECIFIC_ITEM:
+            action = DeleteItem()
+        if action_id == ACTION_ADD_TAX:
+            action = AddTax()
+        if action_id == ACTION_EDIT_SPECIFIC_TAX_NAME:
+            action = EditTaxName()
+        if action_id == ACTION_EDIT_SPECIFIC_TAX_AMT:
+            action = EditTaxAmt()
         if action_id == ACTION_DELETE_SPECIFIC_TAX:
-            return DeleteTax(
-                MODULE_ACTION_TYPE,
-                ACTION_DELETE_SPECIFIC_TAX
-            ).execute(bot, update, trans, subaction_id, data)
+            action = DeleteTax()
+        if action_id == ACTION_CREATE_BILL_DONE:
+            action = CreateBillDone()
+
+        action.execute(bot, update, trans, subaction_id, data)
 
 
 class CreateNewBill(Action):
     ACTION_CREATE_NEW_BILL = 0
     ACTION_NEW_BILL_SET_NAME = 1
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_NEW_BILL)
 
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_CREATE_NEW_BILL:
@@ -214,6 +169,9 @@ class CreateNewBill(Action):
 class DisplayNewBillKB(Action):
     ACTION_DISPLAY_NEW_BILL_KB = 0
 
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_GET_NEW_BILL_KB)
+
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_DISPLAY_NEW_BILL_KB:
             cbq = update.callback_query
@@ -257,6 +215,9 @@ class DisplayNewBillKB(Action):
 
 class DisplayModifyItemsKB(Action):
     ACTION_DISPLAY_MODIFY_ITEMS_KB = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_GET_MODIFY_ITEMS_KB)
 
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_DISPLAY_MODIFY_ITEMS_KB:
@@ -311,6 +272,9 @@ class DisplayModifyItemsKB(Action):
 class DisplayModifyTaxesKB(Action):
     ACTION_DISPLAY_MODIFY_TAXES_KB = 0
 
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_GET_MODIFY_TAXES_KB)
+
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_DISPLAY_MODIFY_TAXES_KB:
             cbq = update.callback_query
@@ -364,6 +328,9 @@ class DisplayModifyTaxesKB(Action):
 class DisplayEditItemsKB(Action):
     ACTION_DISPLAY_EDIT_ITEMS_KB = 0
 
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_GET_EDIT_ITEM_KB)
+
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_DISPLAY_EDIT_ITEMS_KB:
             cbq = update.callback_query
@@ -389,6 +356,9 @@ class DisplayEditItemsKB(Action):
 
 class DisplayEditSpecificItemKB(Action):
     ACTION_DISPLAY_EDIT_SPECIFIC_ITEM_KB = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_GET_EDIT_SPECIFIC_ITEM_KB)
 
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_DISPLAY_EDIT_SPECIFIC_ITEM_KB:
@@ -442,6 +412,9 @@ class DisplayEditSpecificItemKB(Action):
 class DisplayDeleteItemsKB(Action):
     ACTION_DISPLAY_DELETE_ITEMS_KB = 0
 
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_GET_DELETE_ITEM_KB)
+
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_DISPLAY_DELETE_ITEMS_KB:
             cbq = update.callback_query
@@ -468,6 +441,9 @@ class DisplayDeleteItemsKB(Action):
 class DisplayEditTaxesKB(Action):
     ACTION_DISPLAY_EDIT_TAXES_KB = 0
 
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_GET_EDIT_TAX_KB)
+
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_DISPLAY_EDIT_TAXES_KB:
             cbq = update.callback_query
@@ -493,6 +469,9 @@ class DisplayEditTaxesKB(Action):
 
 class DisplayEditSpecificTaxKB(Action):
     ACTION_DISPLAY_EDIT_SPECIFIC_TAX_KB = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_GET_EDIT_SPECIFIC_TAX_KB)
 
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_DISPLAY_EDIT_SPECIFIC_TAX_KB:
@@ -546,6 +525,9 @@ class DisplayEditSpecificTaxKB(Action):
 class DisplayDeleteTaxesKB(Action):
     ACTION_DISPLAY_DELETE_TAXES_KB = 0
 
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_GET_DELETE_TAX_KB)
+
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_DISPLAY_DELETE_TAXES_KB:
             cbq = update.callback_query
@@ -573,6 +555,9 @@ class AddItems(Action):
     ACTION_ASK_FOR_ITEMS = 0
     ACTION_PROCESS_ITEMS = 1
     ACTION_ADD_ITEM_PRICE = 2
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_ADD_ITEMS)
 
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_ASK_FOR_ITEMS:
@@ -693,6 +678,9 @@ class EditItemName(Action):
     ACTION_ASK_FOR_ITEM_NAME = 0
     ACTION_UPDATE_ITEM_NAME = 1
 
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_EDIT_SPECIFIC_ITEM_NAME)
+
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_ASK_FOR_ITEM_NAME:
             cbq = update.callback_query
@@ -772,6 +760,9 @@ class EditItemPrice(Action):
     ACTION_ASK_FOR_ITEM_PRICE = 0
     ACTION_UPDATE_ITEM_PRICE = 1
 
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_EDIT_SPECIFIC_ITEM_PRICE)
+
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_ASK_FOR_ITEM_PRICE:
             cbq = update.callback_query
@@ -848,6 +839,9 @@ class EditItemPrice(Action):
 class DeleteItem(Action):
     ACTION_DELETE_ITEM = 0
 
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_DELETE_SPECIFIC_ITEM)
+
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_DELETE_ITEM:
             cbq = update.callback_query
@@ -877,6 +871,9 @@ class AddTax(Action):
     ACTION_ASK_FOR_TAX = 0
     ACTION_ADD_TAX_NAME = 1
     ACTION_ADD_TAX_AMT = 2
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_ADD_TAX)
 
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_ASK_FOR_TAX:
@@ -980,6 +977,9 @@ class EditTaxName(Action):
     ACTION_ASK_FOR_TAX_NAME = 0
     ACTION_UPDATE_TAX_NAME = 1
 
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_EDIT_SPECIFIC_TAX_NAME)
+
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_ASK_FOR_TAX_NAME:
             cbq = update.callback_query
@@ -1059,6 +1059,9 @@ class EditTaxAmt(Action):
     ACTION_ASK_FOR_TAX_AMT = 0
     ACTION_UPDATE_TAX_AMT = 1
 
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_EDIT_SPECIFIC_TAX_AMT)
+
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_ASK_FOR_TAX_AMT:
             cbq = update.callback_query
@@ -1135,6 +1138,9 @@ class EditTaxAmt(Action):
 class DeleteTax(Action):
     ACTION_DELETE_TAX = 0
 
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_DELETE_SPECIFIC_TAX)
+
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_DELETE_TAX:
             cbq = update.callback_query
@@ -1148,7 +1154,7 @@ class DeleteTax(Action):
                 trans
             )
 
-    def delete_item(self, bot, cbq, bill_id, tax_id, trans):
+    def delete_tax(self, bot, cbq, bill_id, tax_id, trans):
         trans.delete_tax(bill_id, tax_id, cbq.from_user.id)
         trans.reset_session(cbq.from_user.id, cbq.message.chat_id)
         return cbq.edit_message_text(
@@ -1157,6 +1163,29 @@ class DeleteTax(Action):
             reply_markup=DisplayDeleteTaxesKB.get_delete_taxes_keyboard(
                 bill_id, trans
             )
+        )
+
+
+class CreateBillDone(Action):
+    ACTION_BILL_DONE = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_CREATE_BILL_DONE)
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_BILL_DONE:
+            return self.set_bill_done(bot, update, trans, data)
+
+    def set_bill_done(self, bot, update, trans, data):
+        bill_id = data.get(const.JSON_BILL_ID)
+        cbq = update.callback_query
+        trans.set_bill_done(bill_id, cbq.from_user.id)
+        manage_bill_handler.BillManagementHandler().execute(
+            bot,
+            update,
+            trans,
+            manage_bill_handler.ACTION_GET_MANAGE_BILL,
+            data=data
         )
 
 
@@ -1192,7 +1221,7 @@ def get_bill_text(bill_id, user_id, trans):
                 __, title, price = item
                 total += price
 
-                items_text.append(str(i + 1) + '. ' + title + '\n' +
+                items_text.append(str(i + 1) + '. ' + title + '  ' +
                                   const.EMOJI_MONEY_BAG +
                                   '{:.2f}'.format(price))
 

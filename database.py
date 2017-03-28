@@ -156,6 +156,22 @@ class Transaction:
             self.is_error = True
             raise ex
 
+    def set_bill_done(self, bill_id, user_id):
+        try:
+            self.cursor.execute("""\
+                UPDATE bills SET completed_at = NOW()
+                WHERE id = %s
+                    AND owner_id = %s
+                RETURNING id;
+            """, (bill_id, user_id)
+            )
+
+            if self.cursor.rowcount < 1:
+                raise Exception('Add item failed')
+        except Exception as e:
+            self.is_error = True
+            raise e
+
     def add_item(self, bill_id, item_name, price):
         try:
             self.cursor.execute("""\
@@ -418,6 +434,23 @@ class Transaction:
             count = self.cursor.rowcount
             if count != 1:
                 raise Exception("Deleted rows not expected. '{}'".format(count))
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def get_sharers(self, bill_id):
+        try:
+            self.cursor.execute("""\
+                SELECT bs.item_id, u.id, u.username,
+                    u.first_name, u.last_name
+                FROM bill_shares bs
+                INNER JOIN users u ON u.id = bs.user_id
+                WHERE bs.bill_id = %s
+                ORDER BY bs.created_at
+            """, (bill_id,)
+            )
+
+            return self.cursor.fetchall()
         except Exception as e:
             self.is_error = True
             raise e

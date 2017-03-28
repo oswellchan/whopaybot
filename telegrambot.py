@@ -1,7 +1,7 @@
 from telegram.ext import Updater, Filters, CommandHandler, MessageHandler, CallbackQueryHandler
 from telegram.ext.dispatcher import run_async
 from database import Transaction
-from action_handlers import bill_handler
+from action_handlers import create_bill_handler, manage_bill_handler
 import json
 import constants as const
 
@@ -32,7 +32,7 @@ class TelegramBot:
         # Handle all replies
         message_handler = MessageHandler(Filters.all, self.handle_all_msg)
         dispatcher.add_handler(message_handler)
-    
+
     @run_async
     def start(self, bot, update):
         # TODO: make command list screen
@@ -43,17 +43,17 @@ class TelegramBot:
         # only allow private message
         try:
             conn = self.db.get_connection()
-            handler = self.action_handlers_map[const.TYPE_CREATE_BILL]
+            handler = self.get_action_handler(const.TYPE_CREATE_BILL)
             with Transaction(conn) as trans:
                 handler.execute(
                     bot,
                     update,
                     trans,
-                    action_id=bill_handler.ACTION_NEW_BILL
+                    action_id=create_bill_handler.ACTION_NEW_BILL
                 )
         except Exception as e:
             print(e)
-    
+
     @run_async
     def handle_all_msg(self, bot, update):
         try:
@@ -105,8 +105,10 @@ class TelegramBot:
             print(e)
 
     def get_action_handler(self, action_type):
-        if action_type == bill_handler.MODULE_ACTION_TYPE:
-            return bill_handler.BillCreationHandler()
+        if action_type == create_bill_handler.MODULE_ACTION_TYPE:
+            return create_bill_handler.BillCreationHandler()
+        if action_type == manage_bill_handler.MODULE_ACTION_TYPE:
+            return manage_bill_handler.BillManagementHandler()
 
         raise Exception("Action type '{}' unknown".format(action_type))
 
