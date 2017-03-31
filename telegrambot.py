@@ -1,7 +1,8 @@
-from telegram.ext import Updater, Filters, CommandHandler, MessageHandler, CallbackQueryHandler
+from telegram.ext import Updater, Filters
+from telegram.ext import CommandHandler, MessageHandler, CallbackQueryHandler, InlineQueryHandler
 from telegram.ext.dispatcher import run_async
 from database import Transaction
-from action_handlers import create_bill_handler, manage_bill_handler
+from action_handlers import create_bill_handler, manage_bill_handler, share_bill_handler
 import json
 import constants as const
 
@@ -28,6 +29,10 @@ class TelegramBot:
         # Handle callback queries
         callback_handler = CallbackQueryHandler(self.handle_all_callback)
         dispatcher.add_handler(callback_handler)
+
+        # Handle inline queries
+        inline_handler = InlineQueryHandler(self.handle_inline)
+        dispatcher.add_handler(inline_handler)
 
         # Handle all replies
         message_handler = MessageHandler(Filters.all, self.handle_all_msg)
@@ -104,11 +109,28 @@ class TelegramBot:
         except Exception as e:
             print(e)
 
+    @run_async
+    def handle_inline(self, bot, update):
+        try:
+            conn = self.db.get_connection()
+            handler = self.get_action_handler(const.TYPE_SHARE_BILL)
+            with Transaction(conn) as trans:
+                handler.execute(
+                    bot,
+                    update,
+                    trans,
+                    action_id=share_bill_handler.ACTION_FIND_BILL_SHARES
+                )
+        except Exception as e:
+            print(e)
+
     def get_action_handler(self, action_type):
         if action_type == create_bill_handler.MODULE_ACTION_TYPE:
             return create_bill_handler.BillCreationHandler()
         if action_type == manage_bill_handler.MODULE_ACTION_TYPE:
             return manage_bill_handler.BillManagementHandler()
+        if action_type == share_bill_handler.MODULE_ACTION_TYPE:
+            return share_bill_handler.BillShareHandler()
 
         raise Exception("Action type '{}' unknown".format(action_type))
 

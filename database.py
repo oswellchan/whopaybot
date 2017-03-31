@@ -187,15 +187,39 @@ class Transaction:
             self.is_error = True
             raise e
 
-    def get_bill_details(self, bill_id, user_id):
+    def get_bill_details_by_name(self, bill_name, user_id):
+        try:
+            self.cursor.execute("""\
+                SELECT b.id FROM bills b
+                WHERE LOWER(b.title) LIKE '%%' || LOWER(%s) || '%%'
+                AND (b.owner_id = %s
+                     OR EXISTS(
+                        SELECT * FROM bill_shares bs
+                        WHERE bs.bill_id = b.id
+                        AND bs.user_id = %s
+                     )
+                );
+                """, (bill_name, user_id, user_id)
+            )
+            bill_ids = self.cursor.fetchall()
+            return [bill_id[0] for bill_id in bill_ids]
+
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def get_bill_details(self, bill_id):
         bill = {
             'title': '',
+            'time': '',
             'items': [],
             'taxes': []
         }
 
         try:
-            bill['title'] = self.get_bill_name(bill_id, user_id)
+            title, time = self.get_bill_name_time(bill_id)
+            bill['title'] = title
+            bill['time'] = time
             bill['items'] = self.get_bill_items(bill_id)
             bill['taxes'] = self.get_bill_taxes(bill_id)
 
@@ -204,19 +228,18 @@ class Transaction:
             self.is_error = True
             raise e
 
-    def get_bill_name(self, bill_id, user_id):
+    def get_bill_name_time(self, bill_id):
         try:
             self.cursor.execute("""\
-                SELECT b.title FROM bills b
+                SELECT b.title, b.completed_at FROM bills b
                 WHERE b.id = %s
-                    AND b.owner_id = %s
-                """, (bill_id, user_id)
+                """, (bill_id,)
             )
 
             if self.cursor.rowcount != 1:
-                raise Exception('More than 1 bill found')
+                raise Exception('More or less than 1 bill found')
 
-            return self.cursor.fetchone()[0]
+            return self.cursor.fetchone()
         except Exception as e:
             self.is_error = True
             raise e

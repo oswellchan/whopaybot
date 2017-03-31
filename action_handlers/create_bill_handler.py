@@ -1205,7 +1205,7 @@ def send_bill_response(bot, chat_id, user_id,
 
 def get_bill_text(bill_id, user_id, trans):
     try:
-        bill = trans.get_bill_details(bill_id, user_id)
+        bill = trans.get_bill_details(bill_id)
         if bill.get('title') is None or len(bill.get('title')) == 0:
             raise Exception('Bill does not exist')
 
@@ -1241,24 +1241,6 @@ def get_bill_text(bill_id, user_id, trans):
         return text
     except Exception as e:
         print(e)
-
-
-def get_item_buttons(bill_id, action, trans):
-    keyboard = []
-    items = trans.get_bill_items(bill_id)
-    for item_id, item_name, __ in items:
-        item_btn = InlineKeyboardButton(
-            text=item_name,
-            callback_data=utils.get_action_callback_data(
-                MODULE_ACTION_TYPE,
-                action,
-                {const.JSON_BILL_ID: bill_id,
-                 const.JSON_ITEM_ID: item_id}
-            )
-        )
-        keyboard.append([item_btn])
-
-    return keyboard
 
 
 def get_tax_buttons(bill_id, action, trans):

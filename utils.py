@@ -17,9 +17,8 @@ def get_action_callback_data(action_type, action_id, data):
     return json.dumps(data)
 
 
-def get_complete_bill_text(bill_id, user_id, trans):
+def format_complete_bill_text(bill, bill_id, trans):
     try:
-        bill = trans.get_bill_details(bill_id, user_id)
         if bill.get('title') is None or len(bill.get('title')) == 0:
             raise Exception('Bill does not exist')
 
@@ -102,6 +101,14 @@ def get_complete_bill_text(bill_id, user_id, trans):
         print(e)
 
 
+def get_complete_bill_text(bill_id, trans):
+    try:
+        bill = trans.get_bill_details(bill_id)
+        return format_complete_bill_text(bill, bill_id, trans)
+    except Exception as e:
+        print(e)
+
+
 def count_unique_users(sharers):
     unique = set()
     for sharer in sharers:
@@ -118,6 +125,10 @@ def format_name(username, first_name, last_name):
         return username
 
     return last_name
+
+
+def format_time(time):
+    return time.strftime('%d %b %Y %-I:%M%p')
 
 
 def escape_html(s):

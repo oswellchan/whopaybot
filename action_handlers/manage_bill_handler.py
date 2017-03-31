@@ -41,9 +41,8 @@ class SendCompleteBill(Action):
 
     def send_bill_response(self, bot, cbq, bill_id, trans):
         chat_id = cbq.message.chat_id
-        user_id = cbq.from_user.id
-        text, pm = utils.get_complete_bill_text(bill_id, user_id, trans)
-        keyboard = DisplayManageBillKB.get_manage_bill_keyboard(bill_id)
+        text, pm = utils.get_complete_bill_text(bill_id, trans)
+        keyboard = DisplayManageBillKB.get_manage_bill_keyboard(bill_id, trans)
         trans.reset_session(cbq.from_user.id, chat_id)
         cbq.edit_message_text(
             text=text,
@@ -63,18 +62,15 @@ class DisplayManageBillKB(Action):
             cbq = update.callback_query
             bill_id = data.get(const.JSON_BILL_ID)
             return cbq.edit_message_reply_markup(
-                reply_markup=self.get_manage_bill_keyboard(bill_id)
+                reply_markup=self.get_manage_bill_keyboard(bill_id, trans)
             )
 
     @staticmethod
-    def get_manage_bill_keyboard(bill_id):
+    def get_manage_bill_keyboard(bill_id, trans):
+        bill_name, __ = trans.get_bill_name_time(bill_id)
         share_btn = InlineKeyboardButton(
             text="Share Bill",
-            callback_data=utils.get_action_callback_data(
-                MODULE_ACTION_TYPE,
-                ACTION_SHARE_BILL,
-                {const.JSON_BILL_ID: bill_id}
-            )
+            switch_inline_query=bill_name
         )
         refresh_btn = InlineKeyboardButton(
             text="Refresh Bill",
@@ -107,4 +103,6 @@ class RefreshBill(Action):
 
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_REFRESH_BILL:
-            return SendCompleteBill().execute(bot, update, trans, subaction_id, data)
+            return SendCompleteBill().execute(
+                bot, update, trans, subaction_id, data
+            )
