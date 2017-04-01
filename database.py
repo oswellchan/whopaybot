@@ -197,6 +197,7 @@ class Transaction:
                         SELECT * FROM bill_shares bs
                         WHERE bs.bill_id = b.id
                         AND bs.user_id = %s
+                        AND NOT bs.is_deleted
                      )
                 );
                 """, (bill_name, user_id, user_id)
@@ -469,11 +470,65 @@ class Transaction:
                 FROM bill_shares bs
                 INNER JOIN users u ON u.id = bs.user_id
                 WHERE bs.bill_id = %s
+                AND NOT bs.is_deleted
                 ORDER BY bs.created_at
             """, (bill_id,)
             )
 
             return self.cursor.fetchall()
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def toggle_bill_share(self, bill_id, item_id, user_id):
+        try:
+            self.cursor.execute("""\
+                INSERT INTO bill_shares (bill_id, item_id, user_id)
+                    VALUES(%s, %s, %s)
+                ON CONFLICT(user_id, bill_id, item_id) DO UPDATE SET
+                    is_deleted = NOT bill_shares.is_deleted
+                RETURNING id;
+            """, (bill_id, item_id, user_id)
+            )
+
+            if self.cursor.rowcount < 1:
+                raise Exception('Add bill_share fail')
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def toggle_all_bill_shares(self, bill_id, user_id):
+        try:
+            self.cursor.execute("""\
+                INSERT INTO bill_shares (bill_id, item_id, user_id, is_deleted)
+                    SELECT i.bill_id, i.id, %s, TRUE FROM items i
+                    WHERE i.bill_id = %s
+                ON CONFLICT(user_id, bill_id, item_id) DO NOTHING;
+            """, (user_id, bill_id)
+            )
+            self.cursor.execute("""\
+                SELECT bs.is_deleted FROM bill_shares bs
+                     WHERE bs.bill_id = %s
+                     AND bs.user_id = %s
+                     FOR UPDATE
+            """, (bill_id, user_id)
+            )
+            result = self.cursor.fetchall()
+            is_some_deleted = any([r[0] for r in result])
+            if is_some_deleted:
+                self.cursor.execute("""\
+                    UPDATE bill_shares SET is_deleted = FALSE
+                        WHERE bill_id = %s
+                        AND user_id = %s
+                """, (bill_id, user_id)
+                )
+            else:
+                self.cursor.execute("""\
+                    UPDATE bill_shares SET is_deleted = TRUE
+                        WHERE bill_id = %s
+                        AND user_id = %s
+                """, (bill_id, user_id)
+                )
         except Exception as e:
             self.is_error = True
             raise e

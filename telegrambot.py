@@ -68,6 +68,13 @@ class TelegramBot:
             msg = update.message
             with Transaction(conn) as trans:
                 try:
+                    user = update.message.from_user
+                    trans.add_user(
+                        user.id,
+                        user.first_name,
+                        user.last_name,
+                        user.username
+                    )
                     act_type, act_id, subact_id, data = trans.get_session(
                         msg.chat_id,
                         msg.from_user.id,
@@ -92,10 +99,18 @@ class TelegramBot:
 
             conn = self.db.get_connection()
             with Transaction(conn) as trans:
-                trans.get_session(  # create lock to prevent concurrent requests
-                    cbq.message.chat_id,
-                    cbq.from_user.id
+                user = update.callback_query.from_user
+                trans.add_user(
+                    user.id,
+                    user.first_name,
+                    user.last_name,
+                    user.username
                 )
+                if cbq.message is not None:
+                    trans.get_session(  # create lock to prevent concurrent requests
+                        cbq.message.chat_id,
+                        cbq.from_user.id
+                    )
                 payload = json.loads(data)
                 action_type = payload.get(const.JSON_ACTION_TYPE)
                 action_id = payload.get(const.JSON_ACTION_ID)
@@ -115,6 +130,13 @@ class TelegramBot:
             conn = self.db.get_connection()
             handler = self.get_action_handler(const.TYPE_SHARE_BILL)
             with Transaction(conn) as trans:
+                user = update.inline_query.from_user
+                trans.add_user(
+                    user.id,
+                    user.first_name,
+                    user.last_name,
+                    user.username
+                )
                 handler.execute(
                     bot,
                     update,

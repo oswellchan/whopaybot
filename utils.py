@@ -28,34 +28,6 @@ def format_complete_bill_text(bill, bill_id, trans):
         num_sharers = count_unique_users(sharers)
         title_text += ('   ' + const.EMOJI_PERSON + str(num_sharers))
 
-        items_text = []
-        total = 0
-        if len(sharers) < 1:
-            items_text.append('<i>Currently no items</i>')
-        else:
-            item_index = 0
-            user_index = 0
-            prev_id = -1
-            for i_id, i_name, i_price, __, u_username, \
-                    u_first_name, u_last_name in sharers:
-                if i_id != prev_id:
-                    item_index += 1
-                    user_index = 0
-                    total += i_price
-
-                    items_text.append('<i>{}. {}  {}{:.2f}</i>'.format(
-                        str(item_index), i_name, const.EMOJI_MONEY_BAG, i_price
-                    ))
-
-                user_index += 1
-                items_text.append('  {}) {}'.format(
-                    user_index, format_name(
-                        u_username,
-                        u_first_name,
-                        u_last_name
-                    )
-                ))
-
         bill_items = bill.get('items')
         items_text = []
         total = 0
@@ -71,7 +43,7 @@ def format_complete_bill_text(bill, bill_id, trans):
                 ))
 
                 user_index = 0
-                for i_id, username, first_name, last_name in sharers:
+                for i_id, __, username, first_name, last_name in sharers:
                     if i_id == item_id:
                         user_index += 1
                         items_text.append('  {}) {}'.format(
