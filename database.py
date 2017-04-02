@@ -213,14 +213,16 @@ class Transaction:
         bill = {
             'title': '',
             'time': '',
+            'owner_id': 0,
             'items': [],
             'taxes': []
         }
 
         try:
-            title, time = self.get_bill_name_time(bill_id)
+            title, owner_id, time = self.get_bill_gen_info(bill_id)
             bill['title'] = title
             bill['time'] = time
+            bill['owner_id'] = owner_id
             bill['items'] = self.get_bill_items(bill_id)
             bill['taxes'] = self.get_bill_taxes(bill_id)
 
@@ -229,10 +231,10 @@ class Transaction:
             self.is_error = True
             raise e
 
-    def get_bill_name_time(self, bill_id):
+    def get_bill_gen_info(self, bill_id):
         try:
             self.cursor.execute("""\
-                SELECT b.title, b.completed_at FROM bills b
+                SELECT b.title, b.owner_id, b.completed_at FROM bills b
                 WHERE b.id = %s
                 """, (bill_id,)
             )
@@ -285,6 +287,7 @@ class Transaction:
                     WHERE i.id = %s
                     AND b.id = %s
                     AND b.completed_at IS NULL
+                    AND b.closed_at IS NULL
                     AND b.owner_id = %s
                 )
                 RETURNING id
@@ -309,6 +312,7 @@ class Transaction:
                     WHERE i.id = %s
                     AND b.id = %s
                     AND b.completed_at IS NULL
+                    AND b.closed_at IS NULL
                     AND b.owner_id = %s
                 )
                 RETURNING id
@@ -333,6 +337,7 @@ class Transaction:
                     WHERE i.id = %s
                     AND b.id = %s
                     AND b.completed_at IS NULL
+                    AND b.closed_at IS NULL
                     AND b.owner_id = %s
                 )
                 RETURNING id
@@ -401,6 +406,7 @@ class Transaction:
                     WHERE bt.id = %s
                     AND b.id = %s
                     AND b.completed_at IS NULL
+                    AND b.closed_at IS NULL
                     AND b.owner_id = %s
                 )
                 RETURNING id
@@ -425,6 +431,7 @@ class Transaction:
                     WHERE bt.id = %s
                     AND b.id = %s
                     AND b.completed_at IS NULL
+                    AND b.closed_at IS NULL
                     AND b.owner_id = %s
                 )
                 RETURNING id
@@ -449,6 +456,7 @@ class Transaction:
                     WHERE bt.id = %s
                     AND b.id = %s
                     AND b.completed_at IS NULL
+                    AND b.closed_at IS NULL
                     AND b.owner_id = %s
                 )
                 RETURNING id
@@ -529,6 +537,46 @@ class Transaction:
                         AND user_id = %s
                 """, (bill_id, user_id)
                 )
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def add_debtors(self, bill_id, creditor_id, debtors):
+        try:
+            if len(debtors) < 1:
+                return
+
+            query = """\
+                INSERT INTO debts (debtor_id, creditor_id, bill_id,
+                    original_amt, balance)
+                VALUES
+            """
+            values = []
+            for debtor_id, amt in debtors.items():
+                query += " (%s, %s, %s, %s, %s)"
+                values.extend([debtor_id, creditor_id, bill_id, amt, amt])
+            query += """ ON CONFLICT(debtor_id, creditor_id, bill_id) DO NOTHING
+                        RETURNING id"""
+            self.cursor.execute(query, tuple(values))
+
+            if self.cursor.rowcount != len(debtors):
+                raise Exception('Error in debtor adding')
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def get_debts(self, bill_id):
+        try:
+            self.cursor.execute("""\
+                SELECT u.first_name, u.last_name, u.username, d.original_amt,
+                    p.created_at, p.confirmed_at
+                FROM users u
+                INNER JOIN debts d ON d.debtor_id = u.id
+                LEFT JOIN payments p ON p.debt_id = d.id
+                WHERE d.bill_id = %s
+            """, (bill_id,)
+            )
+            return self.cursor.fetchall()
         except Exception as e:
             self.is_error = True
             raise e

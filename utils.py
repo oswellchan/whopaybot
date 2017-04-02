@@ -81,6 +81,41 @@ def get_complete_bill_text(bill_id, trans):
         print(e)
 
 
+def get_debts_bill_text(bill_id, trans):
+    try:
+        debts = trans.get_debts(bill_id)
+        title, __, __ = trans.get_bill_gen_info(bill_id)
+        title_text = '<b>{}</b>'.format(escape_html(title))
+        title_text += ('   ' + const.EMOJI_PERSON + str(len(debts)))
+
+        debts_text = []
+        if len(debts) < 1:
+            debts_text.append('<i>No debts</i>')
+        else:
+            for i, debt in enumerate(debts):
+                fname, lname, uname, debt_amt, pending, paid = debt
+                debt_row = '{}. {}  {}{:.4f} {}'.format(
+                    str(i + 1),
+                    format_name(uname, fname, lname),
+                    const.EMOJI_MONEY_BAG,
+                    debt_amt,
+                    format_paid_status(pending, paid)
+                )
+                debts_text.append(debt_row)
+        text = title_text + '\n\n' + '\n'.join(debts_text)
+        return text, ParseMode.HTML
+    except Exception as e:
+        print(e)
+
+
+def format_paid_status(pending, paid):
+    if paid is not None:
+        return '(Paid)'
+    if pending is not None:
+        return '(Pending)'
+    return ''
+
+
 def count_unique_users(sharers):
     unique = set()
     for sharer in sharers:
