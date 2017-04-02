@@ -53,8 +53,49 @@ class BillCreationHandler(ActionHandler):
     def __init__(self):
         super().__init__(MODULE_ACTION_TYPE)
 
+    def evaluate_rights(self, update, trans, data):
+        if data is None:
+            return True, None, None
+        bill_id = data.get('bill_id')
+        if bill_id is None:
+            bill_id = data.get(const.JSON_BILL_ID)
+        if bill_id is None:
+            return True, None, None
+
+        __, owner_id, is_complete, is_closed = trans.get_bill_gen_info(bill_id)
+        chat_id = None
+        if update.callback_query is not None:
+            has_rights = update.callback_query.from_user.id == owner_id
+            chat_id = update.callback_query.message.chat_id
+            if not has_rights:
+                return has_rights, chat_id, 'Sorry, you do not have permission for this action.'
+
+        if chat_id is None and update.message is not None:
+            has_rights = update.message.from_user.id == owner_id
+            chat_id = update.message.chat_id
+            if not has_rights:
+                return has_rights, chat_id, 'Sorry, you do not have permission for this action.'
+
+        if is_complete is not None:
+            return False, chat_id, 'Sorry, bill is already finalized and cannot be edited.'
+        if is_closed is not None:
+            return False, chat_id, 'Sorry, bill is already calculated and closed.'
+
+        return True, None, None
+
     def execute(self, bot, update, trans, action_id,
                 subaction_id=0, data=None):
+        has_rights, chat_id, text = self.evaluate_rights(update, trans, data)
+        if not has_rights:
+            if chat_id is not None:
+                if update.callback_query is not None:
+                    update.callback_query.answer()
+                bot.sendMessage(
+                    chat_id=chat_id,
+                    text=text
+                )
+            return
+
         action = None
         if action_id == ACTION_NEW_BILL:
             action = CreateNewBill()

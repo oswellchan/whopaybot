@@ -84,7 +84,7 @@ def get_complete_bill_text(bill_id, trans):
 def get_debts_bill_text(bill_id, trans):
     try:
         debts = trans.get_debts(bill_id)
-        title, __, __ = trans.get_bill_gen_info(bill_id)
+        title, __, __, __ = trans.get_bill_gen_info(bill_id)
         title_text = '<b>{}</b>'.format(escape_html(title))
         title_text += ('   ' + const.EMOJI_PERSON + str(len(debts)))
 

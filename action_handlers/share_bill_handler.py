@@ -141,3 +141,20 @@ def get_share_keyboard(bill_id, action, trans):
     keyboard.append([share_all_btn])
 
     return InlineKeyboardMarkup(keyboard)
+
+
+def has_rights(update, trans, data):
+    if data is None:
+        return True
+    bill_id = data.get('bill_id')
+    if bill_id is None:
+        bill_id = data.get(const.JSON_BILL_ID)
+    if bill_id is None:
+        return True, None, None
+
+    __, __, __, is_closed = trans.get_bill_gen_info(bill_id)
+
+    if is_closed is not None:
+        return False
+
+    return True

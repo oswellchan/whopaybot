@@ -15,7 +15,7 @@ ACTION_CALCULATE_SPLIT = 3
 ACTION_REFRESH_BILL = 4
 ACTION_SEND_DEBTS_BILL_ADMIN = 5
 
-REQUEST_CALC_SPLIT_CONFIRMATION = "You are about to calculate the splitting of the bill. Once this is done, no one can share the bill anymore. Do you wish to continue? Reply 'yes' or 'no'."
+REQUEST_CALC_SPLIT_CONFIRMATION = "You are about to calculate the splitting of the bill. Once this is done, no new person can be added to the bill anymore. Do you wish to continue? Reply 'yes' or 'no'."
 ERROR_INVALID_CONFIRMATION = "Sorry, I could not understand the message. Reply 'yes' to continue or 'no' to cancel."
 YES_WITH_QUOTES = "'yes'"
 YES = 'yes'
@@ -46,6 +46,16 @@ class SendCompleteBill(Action):
         super().__init__(MODULE_ACTION_TYPE, ACTION_GET_MANAGE_BILL)
 
     def execute(self, bot, update, trans, subaction_id=0, data=None):
+        has_rights, chat_id, text = evaluate_rights(update, trans, data)
+        if not has_rights:
+            if chat_id is not None:
+                if update.callback_query is not None:
+                    update.callback_query.answer()
+                bot.sendMessage(
+                    chat_id=chat_id,
+                    text=text
+                )
+            return
         if subaction_id == self.ACTION_MANAGE_BILL:
             cbq = update.callback_query
             bill_id = data.get(const.JSON_BILL_ID)
@@ -71,6 +81,16 @@ class DisplayManageBillKB(Action):
         super().__init__(MODULE_ACTION_TYPE, ACTION_GET_MANAGE_BILL_KB)
 
     def execute(self, bot, update, trans, subaction_id, data=None):
+        has_rights, chat_id, text = evaluate_rights(update, trans, data)
+        if not has_rights:
+            if chat_id is not None:
+                if update.callback_query is not None:
+                    update.callback_query.answer()
+                bot.sendMessage(
+                    chat_id=chat_id,
+                    text=text
+                )
+            return
         if subaction_id == self.ACTION_DISPLAY_NEW_BILL_KB:
             cbq = update.callback_query
             bill_id = data.get(const.JSON_BILL_ID)
@@ -80,7 +100,7 @@ class DisplayManageBillKB(Action):
 
     @staticmethod
     def get_manage_bill_keyboard(bill_id, trans):
-        bill_name, __, __ = trans.get_bill_gen_info(bill_id)
+        bill_name, __, __, __ = trans.get_bill_gen_info(bill_id)
         share_btn = InlineKeyboardButton(
             text="Share Bill",
             switch_inline_query=bill_name
@@ -127,6 +147,16 @@ class CalculateBillSplit(Action):
         super().__init__(MODULE_ACTION_TYPE, ACTION_CALCULATE_SPLIT)
 
     def execute(self, bot, update, trans, subaction_id, data=None):
+        has_rights, chat_id, text = evaluate_rights(update, trans, data)
+        if not has_rights:
+            if chat_id is not None:
+                if update.callback_query is not None:
+                    update.callback_query.answer()
+                bot.sendMessage(
+                    chat_id=chat_id,
+                    text=text
+                )
+            return
         if subaction_id == self.ACTION_REQUEST_CONFIRMATION:
             cbq = update.callback_query
             bill_id = data.get(const.JSON_BILL_ID)
@@ -217,8 +247,8 @@ class CalculateBillSplit(Action):
                     else:
                         debtors[sharer] += debt
 
-            print(debtors)
             trans.add_debtors(bill_id, bill['owner_id'], debtors)
+            trans.close_bill(bill_id)
             return SendDebtsBillAdmin().execute(bot, update, trans, data=data)
         except Exception as e:
             print(e)
@@ -232,13 +262,12 @@ class SendDebtsBillAdmin(Action):
 
     def execute(self, bot, update, trans, subaction_id=0, data=None):
         if subaction_id == self.ACTION_SEND_DEBTS_BILL:
-            print(data)
             bill_id = data.get('bill_id')
             msg = update.message
             self.send_debts_bill(bot, bill_id, msg, trans)
 
     def send_debts_bill(self, bot, bill_id, msg, trans):
-        bill_name, __, __ = trans.get_bill_gen_info(bill_id)
+        bill_name, __, __, __ = trans.get_bill_gen_info(bill_id)
         share_btn = InlineKeyboardButton(
             text="Share Bill",
             switch_inline_query=bill_name
@@ -263,3 +292,33 @@ class SendDebtsBillAdmin(Action):
             parse_mode=pm,
             reply_markup=kb
         )
+
+
+def evaluate_rights(update, trans, data):
+    if data is None:
+        return True, None, None
+    bill_id = data.get('bill_id')
+    if bill_id is None:
+        bill_id = data.get(const.JSON_BILL_ID)
+    if bill_id is None:
+        return True, None, None
+
+    __, owner_id, __, is_closed = trans.get_bill_gen_info(bill_id)
+    chat_id = None
+    if update.callback_query is not None:
+        has_rights = update.callback_query.from_user.id == owner_id
+        chat_id = update.callback_query.message.chat_id
+        if not has_rights:
+            update.callback_query.answer()
+            return has_rights, chat_id, 'Sorry, you do not have permission for this action.'
+
+    if chat_id is None and update.message is not None:
+        has_rights = update.message.from_user.id == owner_id
+        chat_id = update.message.chat_id
+        if not has_rights:
+            return has_rights, chat_id, 'Sorry, you do not have permission for this action.'
+
+    if is_closed is not None:
+        return False, chat_id, 'Sorry, bill is already calculated and closed.'
+
+    return True, None, None

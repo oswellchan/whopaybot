@@ -209,6 +209,17 @@ class Transaction:
             self.is_error = True
             raise e
 
+    def close_bill(self, bill_id):
+        try:
+            self.cursor.execute("""\
+                UPDATE bills SET closed_at = NOW()
+                WHERE id = %s
+                """, (bill_id,)
+            )
+        except Exception as e:
+            self.is_error = True
+            raise e
+
     def get_bill_details(self, bill_id):
         bill = {
             'title': '',
@@ -219,7 +230,7 @@ class Transaction:
         }
 
         try:
-            title, owner_id, time = self.get_bill_gen_info(bill_id)
+            title, owner_id, time, __ = self.get_bill_gen_info(bill_id)
             bill['title'] = title
             bill['time'] = time
             bill['owner_id'] = owner_id
@@ -234,7 +245,8 @@ class Transaction:
     def get_bill_gen_info(self, bill_id):
         try:
             self.cursor.execute("""\
-                SELECT b.title, b.owner_id, b.completed_at FROM bills b
+                SELECT b.title, b.owner_id, b.completed_at,
+                    b.closed_at FROM bills b
                 WHERE b.id = %s
                 """, (bill_id,)
             )
