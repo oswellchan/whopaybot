@@ -141,7 +141,7 @@ class TelegramBot:
                     bot,
                     update,
                     trans,
-                    action_id=share_bill_handler.ACTION_FIND_BILL_SHARES
+                    action_id=share_bill_handler.ACTION_FIND_BILLS
                 )
         except Exception as e:
             print(e)

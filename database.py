@@ -2,6 +2,7 @@ import psycopg2
 import uuid
 import json
 import utils
+import math
 
 
 UNIQUE_VIOLATION = '23505'
@@ -190,8 +191,9 @@ class Transaction:
     def get_bill_details_by_name(self, bill_name, user_id):
         try:
             self.cursor.execute("""\
-                SELECT b.id FROM bills b
+                SELECT b.id, b.closed_at FROM bills b
                 WHERE LOWER(b.title) LIKE '%%' || LOWER(%s) || '%%'
+                AND b.completed_at IS NOT NULL
                 AND (b.owner_id = %s
                      OR EXISTS(
                         SELECT * FROM bill_shares bs
@@ -202,8 +204,7 @@ class Transaction:
                 );
                 """, (bill_name, user_id, user_id)
             )
-            bill_ids = self.cursor.fetchall()
-            return [bill_id[0] for bill_id in bill_ids]
+            return self.cursor.fetchall()
 
         except Exception as e:
             self.is_error = True
@@ -560,13 +561,15 @@ class Transaction:
 
             query = """\
                 INSERT INTO debts (debtor_id, creditor_id, bill_id,
-                    original_amt, balance)
+                    original_amt)
                 VALUES
             """
+            sql_vars = []
             values = []
             for debtor_id, amt in debtors.items():
-                query += " (%s, %s, %s, %s, %s)"
-                values.extend([debtor_id, creditor_id, bill_id, amt, amt])
+                sql_vars.append(" (%s, %s, %s, %s)")
+                values.extend([debtor_id, creditor_id, bill_id, amt])
+            query += ','.join(sql_vars)
             query += """ ON CONFLICT(debtor_id, creditor_id, bill_id) DO NOTHING
                         RETURNING id"""
             self.cursor.execute(query, tuple(values))
@@ -577,15 +580,102 @@ class Transaction:
             self.is_error = True
             raise e
 
+    def add_payment(self, type, bill_id, creditor_id, debtor_id,
+                    amt, debt_id=None, comments=None):
+        try:
+            pass
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def add_payment_by_bill(self, d_type, bill_id, creditor_id, debtor_id,
+                            auto_confirm=False, amt=None):
+        try:
+            self.cursor.execute("""\
+                SELECT d.id, d.original_amt, p.amount
+                FROM debts d
+                LEFT JOIN payments p ON p.debt_id = d.id
+                WHERE d.bill_id = %s
+                AND d.debtor_id = %s
+                AND d.creditor_id = %s
+                AND d.is_deleted = FALSE
+                AND NOT COALESCE(p.is_deleted, FALSE)
+                AND (
+                    (p.created_at IS NOT NULL AND p.confirmed_at IS NOT NULL)
+                    OR (p.created_at IS NULL AND p.confirmed_at IS NULL)
+                )
+                ORDER BY d.id
+                FOR UPDATE OF d
+            """, (bill_id, debtor_id, creditor_id)
+            )
+
+            results = self.cursor.fetchall()
+            final_amts = []
+            prev_d_id = None
+            final_amt = 0
+            for i, result in enumerate(results):
+                d_id, d_amt, p_amt = result
+                if prev_d_id is None:
+                    prev_d_id = d_id
+                    final_amt = d_amt
+
+                if prev_d_id != d_id:
+                    if not math.isclose(final_amt, 0):
+                        final_amts.append((prev_d_id, final_amt))
+                    prev_d_id = d_id
+                    final_amt = amt
+
+                if p_amt is not None:
+                    final_amt -= p_amt
+
+                if i >= len(results) - 1:
+                    if not math.isclose(final_amt, 0):
+                        final_amts.append((prev_d_id, final_amt))
+
+            if len(final_amts) < 1:
+                return
+
+            query = """\
+                INSERT INTO payments (type, debt_id, amount,
+                    confirmed_at)
+                VALUES
+            """
+            sql_vars = []
+            values = []
+            for debt_id, amt in final_amts:
+                if auto_confirm:
+                    sql_vars.append(" (%s, %s, %s, NOW())")
+                else:
+                    sql_vars.append(" (%s, %s, %s, NULL)")
+                values.extend([d_type, debt_id, amt])
+            query += ','.join(sql_vars)
+            query += " RETURNING id"
+            self.cursor.execute(query, tuple(values))
+        except Exception as e:
+            self.is_error = True
+            raise e
+
     def get_debts(self, bill_id):
         try:
             self.cursor.execute("""\
-                SELECT u.first_name, u.last_name, u.username, d.original_amt,
-                    p.created_at, p.confirmed_at
-                FROM users u
-                INNER JOIN debts d ON d.debtor_id = u.id
-                LEFT JOIN payments p ON p.debt_id = d.id
-                WHERE d.bill_id = %s
+                SELECT a.id, a.debt_amt,
+                    a.debtor_id, u1.first_name, u1.last_name, u1.username,
+                    a.creditor_id, u2.first_name, u2.last_name, u2.username,
+                    p.amount, p.created_at, p.confirmed_at
+                FROM
+                    (
+                        SELECT d.id, d.debtor_id, d.creditor_id,
+                            SUM(d.original_amt) AS debt_amt
+                        FROM debts d
+                        WHERE d.bill_id = %s
+                        AND d.is_deleted = FALSE
+                        GROUP BY d.id, d.debtor_id, d.creditor_id
+                    ) AS a
+                INNER JOIN users u1 ON u1.id = a.debtor_id
+                INNER JOIN users u2 ON u2.id = a.creditor_id
+                LEFT JOIN payments p ON p.debt_id = a.id
+                WHERE NOT COALESCE(p.is_deleted, FALSE)
+                ORDER BY a.creditor_id, a.debtor_id
             """, (bill_id,)
             )
             return self.cursor.fetchall()

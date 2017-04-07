@@ -56,9 +56,7 @@ class BillCreationHandler(ActionHandler):
     def evaluate_rights(self, update, trans, data):
         if data is None:
             return True, None, None
-        bill_id = data.get('bill_id')
-        if bill_id is None:
-            bill_id = data.get(const.JSON_BILL_ID)
+        bill_id = data.get(const.JSON_BILL_ID)
         if bill_id is None:
             return True, None, None
 
@@ -620,7 +618,7 @@ class AddItems(Action):
             self.action_id,
             self.ACTION_PROCESS_ITEMS,
             trans,
-            data={'bill_id': bill_id}
+            data={const.JSON_BILL_ID: bill_id}
         )
         cbq.answer()
         bot.sendMessage(chat_id=cbq.message.chat_id, text=REQUEST_ITEM_NAME)
@@ -684,7 +682,7 @@ class AddItems(Action):
 
         try:
             price = float(text)
-            bill_id = data.get('bill_id')
+            bill_id = data.get(const.JSON_BILL_ID)
             if bill_id is None:
                 raise Exception('bill_id is None')
             item_name = data.get('item_name')
@@ -746,8 +744,8 @@ class EditItemName(Action):
             self.action_id,
             self.ACTION_UPDATE_ITEM_NAME,
             trans,
-            data={'bill_id': bill_id,
-                  'item_id': item_id}
+            data={const.JSON_BILL_ID: bill_id,
+                  const.JSON_ITEM_ID: item_id}
         )
         cbq.answer()
         bot.sendMessage(
@@ -769,10 +767,10 @@ class EditItemName(Action):
                 text=ERROR_INVALID_ITEM_NAME
             )
         try:
-            bill_id = data.get('bill_id')
+            bill_id = data.get(const.JSON_BILL_ID)
             if bill_id is None:
                 raise Exception('bill_id is None')
-            item_id = data.get('item_id')
+            item_id = data.get(const.JSON_ITEM_ID)
             if item_id is None:
                 raise Exception('item_id is None')
             trans.edit_item_name(bill_id, item_id, msg.from_user.id, text)
@@ -828,8 +826,8 @@ class EditItemPrice(Action):
             self.action_id,
             self.ACTION_UPDATE_ITEM_PRICE,
             trans,
-            data={'bill_id': bill_id,
-                  'item_id': item_id}
+            data={const.JSON_BILL_ID: bill_id,
+                  const.JSON_ITEM_ID: item_id}
         )
         cbq.answer()
         bot.sendMessage(
@@ -847,10 +845,10 @@ class EditItemPrice(Action):
         text = msg.text
         try:
             price = float(text)
-            bill_id = data.get('bill_id')
+            bill_id = data.get(const.JSON_BILL_ID)
             if bill_id is None:
                 raise Exception('bill_id is None')
-            item_id = data.get('item_id')
+            item_id = data.get(const.JSON_ITEM_ID)
             if item_id is None:
                 raise Exception('item_id is None')
             trans.edit_item_price(bill_id, item_id, msg.from_user.id, price)
@@ -936,7 +934,7 @@ class AddTax(Action):
             self.action_id,
             self.ACTION_ADD_TAX_NAME,
             trans,
-            data={'bill_id': bill_id}
+            data={const.JSON_BILL_ID: bill_id}
         )
         cbq.answer()
         bot.sendMessage(chat_id=cbq.message.chat_id, text=REQUEST_TAX_NAME)
@@ -986,7 +984,7 @@ class AddTax(Action):
 
             text = msg.text
             amt = float(text)
-            bill_id = data.get('bill_id')
+            bill_id = data.get(const.JSON_BILL_ID)
             if bill_id is None:
                 raise Exception('bill_id is None')
             tax_name = data.get('tax_name')
@@ -1045,8 +1043,8 @@ class EditTaxName(Action):
             self.action_id,
             self.ACTION_UPDATE_TAX_NAME,
             trans,
-            data={'bill_id': bill_id,
-                  'tax_id': tax_id}
+            data={const.JSON_BILL_ID: bill_id,
+                  const.JSON_TAX_ID: tax_id}
         )
         cbq.answer()
         bot.sendMessage(
@@ -1068,10 +1066,10 @@ class EditTaxName(Action):
                 text=ERROR_INVALID_TAX_NAME
             )
         try:
-            bill_id = data.get('bill_id')
+            bill_id = data.get(const.JSON_BILL_ID)
             if bill_id is None:
                 raise Exception('bill_id is None')
-            tax_id = data.get('tax_id')
+            tax_id = data.get(const.JSON_TAX_ID)
             if tax_id is None:
                 raise Exception('tax_id is None')
             trans.edit_tax_name(bill_id, tax_id, msg.from_user.id, text)
@@ -1127,8 +1125,8 @@ class EditTaxAmt(Action):
             self.action_id,
             self.ACTION_UPDATE_TAX_AMT,
             trans,
-            data={'bill_id': bill_id,
-                  'tax_id': tax_id}
+            data={const.JSON_BILL_ID: bill_id,
+                  const.JSON_TAX_ID: tax_id}
         )
         cbq.answer()
         bot.sendMessage(
@@ -1146,12 +1144,12 @@ class EditTaxAmt(Action):
         text = msg.text
         try:
             amt = float(text)
-            bill_id = data.get('bill_id')
+            bill_id = data.get(const.JSON_BILL_ID)
             if bill_id is None:
                 raise Exception('bill_id is None')
-            tax_id = data.get('tax_id')
+            tax_id = data.get(const.JSON_TAX_ID)
             if tax_id is None:
-                raise Exception('item_id is None')
+                raise Exception('tax_id is None')
             trans.edit_tax_amt(bill_id, tax_id, msg.from_user.id, amt)
             trans.reset_session(msg.from_user.id, msg.chat_id)
             return send_bill_response(

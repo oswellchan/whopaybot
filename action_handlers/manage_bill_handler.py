@@ -14,6 +14,7 @@ ACTION_SHARE_BILL = 2
 ACTION_CALCULATE_SPLIT = 3
 ACTION_REFRESH_BILL = 4
 ACTION_SEND_DEBTS_BILL_ADMIN = 5
+ACTION_CONFIRM_BILL_PAYMENT = 6
 
 REQUEST_CALC_SPLIT_CONFIRMATION = "You are about to calculate the splitting of the bill. Once this is done, no new person can be added to the bill anymore. Do you wish to continue? Reply 'yes' or 'no'."
 ERROR_INVALID_CONFIRMATION = "Sorry, I could not understand the message. Reply 'yes' to continue or 'no' to cancel."
@@ -136,7 +137,24 @@ class RefreshBill(Action):
 
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_REFRESH_BILL:
-            return SendCompleteBill().execute(bot, update, trans, data=data)
+            bill_id = data.get(const.JSON_BILL_ID)
+            __, __, __, closed_at = trans.get_bill_gen_info(bill_id)
+            if closed_at is None:
+                return SendCompleteBill().execute(
+                    bot, update, trans, data=data
+                )
+            else:
+                return self.refresh_debts_bill(update, trans, data)
+
+    def refresh_debts_bill(self, update, trans, data):
+        bill_id = data.get(const.JSON_BILL_ID)
+        txt, pm, kb = SendDebtsBillAdmin.get_debts_bill_msg(bill_id, trans)
+        update.callback_query.answer()
+        update.callback_query.edit_message_text(
+            text=txt,
+            parse_mode=pm,
+            reply_markup=kb
+        )
 
 
 class CalculateBillSplit(Action):
@@ -172,7 +190,7 @@ class CalculateBillSplit(Action):
             self.action_id,
             self.ACTION_PROCESS_SPLIT_BILL,
             trans,
-            data={'bill_id': bill_id}
+            data={const.JSON_BILL_ID: bill_id}
         )
         cbq.answer()
         bot.sendMessage(
@@ -195,7 +213,7 @@ class CalculateBillSplit(Action):
                 return self.split_bill(bot, update, trans, data)
             if (text.lower() == NO_WITH_QUOTES or
                     text.lower() == NO):
-                bill_id = data.get('bill_id')
+                bill_id = data.get(const.JSON_BILL_ID)
                 if bill_id is None:
                     raise Exception('bill_id not saved in session')
                 return self.send_manage_bill(
@@ -222,7 +240,7 @@ class CalculateBillSplit(Action):
 
     def split_bill(self, bot, update, trans, data):
         try:
-            bill_id = data['bill_id']
+            bill_id = data[const.JSON_BILL_ID]
             bill = trans.get_bill_details(bill_id)
             taxes = bill['taxes']
             tax_amt = 1
@@ -249,6 +267,13 @@ class CalculateBillSplit(Action):
 
             trans.add_debtors(bill_id, bill['owner_id'], debtors)
             trans.close_bill(bill_id)
+            trans.add_payment_by_bill(
+                const.PAY_TYPE_NORMAL,
+                bill_id,
+                bill['owner_id'],
+                bill['owner_id'],
+                auto_confirm=True
+            )
             return SendDebtsBillAdmin().execute(bot, update, trans, data=data)
         except Exception as e:
             print(e)
@@ -262,11 +287,22 @@ class SendDebtsBillAdmin(Action):
 
     def execute(self, bot, update, trans, subaction_id=0, data=None):
         if subaction_id == self.ACTION_SEND_DEBTS_BILL:
-            bill_id = data.get('bill_id')
+            bill_id = data.get(const.JSON_BILL_ID)
             msg = update.message
             self.send_debts_bill(bot, bill_id, msg, trans)
 
     def send_debts_bill(self, bot, bill_id, msg, trans):
+        text, pm, kb = self.get_debts_bill_msg(bill_id, trans)
+        trans.reset_session(msg.chat_id, msg.from_user.id)
+        bot.sendMessage(
+            chat_id=msg.chat_id,
+            text=text,
+            parse_mode=pm,
+            reply_markup=kb
+        )
+
+    @staticmethod
+    def get_debts_bill_msg(bill_id, trans):
         bill_name, __, __, __ = trans.get_bill_gen_info(bill_id)
         share_btn = InlineKeyboardButton(
             text="Share Bill",
@@ -280,26 +316,27 @@ class SendDebtsBillAdmin(Action):
                 {const.JSON_BILL_ID: bill_id}
             )
         )
+        confirm_btn = InlineKeyboardButton(
+            text="Confirm Payments",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_CONFIRM_BILL_PAYMENT,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
         kb = InlineKeyboardMarkup(
             [[share_btn],
-             [refresh_btn]]
+             [refresh_btn],
+             [confirm_btn]]
         )
         text, pm = utils.get_debts_bill_text(bill_id, trans)
-        trans.reset_session(msg.chat_id, msg.from_user.id)
-        bot.sendMessage(
-            chat_id=msg.chat_id,
-            text=text,
-            parse_mode=pm,
-            reply_markup=kb
-        )
+        return text, pm, kb
 
 
 def evaluate_rights(update, trans, data):
     if data is None:
         return True, None, None
-    bill_id = data.get('bill_id')
-    if bill_id is None:
-        bill_id = data.get(const.JSON_BILL_ID)
+    bill_id = data.get(const.JSON_BILL_ID)
     if bill_id is None:
         return True, None, None
 

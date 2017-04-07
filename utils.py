@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import constants as const
+import math
 
 
 def print_error():
@@ -83,24 +84,35 @@ def get_complete_bill_text(bill_id, trans):
 
 def get_debts_bill_text(bill_id, trans):
     try:
-        debts = trans.get_debts(bill_id)
+        debts, unique_users = calculate_remaining_debt(bill_id, trans)
         title, __, __, __ = trans.get_bill_gen_info(bill_id)
         title_text = '<b>{}</b>'.format(escape_html(title))
-        title_text += ('   ' + const.EMOJI_PERSON + str(len(debts)))
+        title_text += ('   ' + const.EMOJI_PERSON + str(unique_users))
 
         debts_text = []
         if len(debts) < 1:
             debts_text.append('<i>No debts</i>')
         else:
-            for i, debt in enumerate(debts):
-                fname, lname, uname, debt_amt, pending, paid = debt
-                debt_row = '{}. {}  {}{:.4f} {}'.format(
-                    str(i + 1),
+            for debt in debts:
+                __, fname, lname, uname = debt['creditor']
+                h = '<i>Pay to:</i>\n{}  {}{:.2f}\n\n<i>Paying:</i>'.format(
                     format_name(uname, fname, lname),
                     const.EMOJI_MONEY_BAG,
-                    debt_amt,
-                    format_paid_status(pending, paid)
+                    debt['total_amt']
                 )
+                debts_text.append(h)
+                if len(debt['debtors']) < 1:
+                    debts_text.append('No debts')
+                for i, debtor in enumerate(debt['debtors']):
+                    __, fname, lname, uname = debtor['debtor']
+                    debt_row = '{}. {}\n{}{:.4f}/{:.4f} {}'.format(
+                        str(i + 1),
+                        format_name(uname, fname, lname),
+                        const.EMOJI_MONEY_BAG,
+                        debtor['amt'],
+                        debtor['orig_amt'],
+                        debtor['status']
+                    )
                 debts_text.append(debt_row)
         text = title_text + '\n\n' + '\n'.join(debts_text)
         return text, ParseMode.HTML
@@ -108,12 +120,81 @@ def get_debts_bill_text(bill_id, trans):
         print(e)
 
 
-def format_paid_status(pending, paid):
-    if paid is not None:
-        return '(Paid)'
-    if pending is not None:
-        return '(Pending)'
-    return ''
+def calculate_remaining_debt(bill_id, trans):
+    unique_users = set()
+    results = []
+    debts = trans.get_debts(bill_id)
+    if len(debts) < 1:
+        return []
+
+    result = None
+    debtor = None
+    is_pending = False
+    for i, debt in enumerate(debts):
+        unique_users.add(debt[2])
+        creditor = (debt[6], debt[7], debt[8], debt[9])
+        if result is None:
+            result = {
+                'total_amt': 0,
+                'creditor': creditor,
+                'debtors': []
+            }
+        if result['creditor'] != creditor:
+            results.append(result)
+            result = {
+                'total_amt': 0,
+                'creditor': creditor,
+                'debtors': []
+            }
+
+        debt_id = debt[0]
+        if debtor is None:
+            debtor = {
+                'debtor': (debt[2], debt[3], debt[4], debt[5]),
+                'debt_id': debt_id,
+                'orig_amt': debt[1],
+                'amt': debt[1],
+                'status': '',
+            }
+            result['total_amt'] += debt[1]
+
+        if debtor['debt_id'] != debt_id:
+            if is_pending:
+                debtor['status'] = '(Pending)'
+            elif math.isclose(debtor['amt'], 0):
+                debtor['amt'] = 0
+                debtor['status'] = '(Paid)'
+            results['debtors'].append(debtor)
+
+            # Reset debtor info with new info
+            is_pending = False
+            debtor = {
+                'debtor': (debt[2], debt[3], debt[4], debt[5]),
+                'debt_id': debt_id,
+                'orig_amt': debt[1],
+                'amt': debt[1],
+                'status': '',
+            }
+            result['total_amt'] += debt[1]
+
+        pay_amt = debt[10]
+        created_at = debt[11]
+        confirmed_at = debt[12]
+        if confirmed_at is not None:
+            debtor['amt'] -= pay_amt
+        else:
+            is_pending = is_pending or (created_at is not None)
+
+        if i >= len(debts) - 1:
+            if is_pending:
+                debtor['status'] = '(Pending)'
+            elif math.isclose(debtor['amt'], 0):
+                debtor['amt'] = 0
+                debtor['status'] = '(Paid)'
+            result['debtors'].append(debtor)
+            results.append(result)
+
+    return results, len(unique_users)
 
 
 def count_unique_users(sharers):
