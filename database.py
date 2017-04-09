@@ -5,9 +5,6 @@ import utils
 import math
 
 
-UNIQUE_VIOLATION = '23505'
-
-
 class Database:
     def __init__(self, host, db, port, user, pw):
         self.host = host
