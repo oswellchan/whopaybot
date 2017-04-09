@@ -12,5 +12,8 @@ if __name__ == '__main__':
         settings.DB_USER,
         settings.DB_PASS
     )
-    bot = TelegramBot(settings.TOKEN, db)
-    bot.start_bot()
+    bot = TelegramBot(settings.TOKEN,
+                      settings.APP_NAME,
+                      settings.PORT,
+                      db,
+                      settings.IS_PROD)

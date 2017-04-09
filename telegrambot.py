@@ -11,13 +11,21 @@ PRIVATE_CHAT = 'private'
 
 
 class TelegramBot:
-    def __init__(self, token, db):
+    def __init__(self, token, app_name, port, db, is_prod):
         self.db = db
         self.updater = Updater(token=token)
         self.init_handlers(self.updater.dispatcher)
 
-    def start_bot(self):
-        self.updater.start_polling()
+        if is_prod:
+            self.updater.start_webhook(listen="0.0.0.0",
+                                       port=port,
+                                       url_path=token)
+            self.updater.bot.setWebhook("https://{}.herokuapp.com/{}".format(
+                app_name, token)
+            )
+            self.updater.idle()
+        else:
+            self.updater.start_polling()
 
     def init_handlers(self, dispatcher):
         # Command handlers

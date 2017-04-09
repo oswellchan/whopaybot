@@ -12,8 +12,11 @@ class EnvSettings:
             pass
 
         self.TOKEN = environ.get("TOKEN")
+        self.PORT = int(environ.get('PORT', '5000'))
+        self.APP_NAME = environ.get("APP_NAME")
+        self.IS_PROD = int(environ.get("IS_PROD"))
 
-        if int(environ.get("IS_PROD")):
+        if self.IS_PROD:
             url = urlparse.urlparse(environ['DATABASE_URL'])
             self.DB_NAME = url.path[1:]
             self.DB_USER = url.username
