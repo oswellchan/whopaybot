@@ -4,7 +4,9 @@ from telegrambot import TelegramBot
 
 
 if __name__ == '__main__':
+    print('hello world')
     settings = EnvSettings()
+    print('db')
     db = Database(
         settings.DB_HOST,
         settings.DB_NAME,
@@ -12,6 +14,10 @@ if __name__ == '__main__':
         settings.DB_USER,
         settings.DB_PASS
     )
+    print(settings.TOKEN)
+    print(settings.APP_NAME)
+    print(settings.PORT)
+    print(settings.IS_PROD)
     bot = TelegramBot(settings.TOKEN,
                       settings.APP_NAME,
                       settings.PORT,
