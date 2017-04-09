@@ -6,6 +6,10 @@ class ActionHandler:
                 subaction_id=0, data=None):
         pass
 
+    def execute_done(self, bot, update, trans, action_id,
+                     subaction_id=0, data=None):
+        pass
+
 
 class Action:
     def __init__(self, action_type, action_id):
@@ -13,6 +17,9 @@ class Action:
         self.action_id = action_id
 
     def execute(self, bot, update, trans, subaction_id, data=None):
+        pass
+
+    def done(self, bot, update, trans, subaction_id, data=None):
         pass
 
     def set_session(self, chat_id, user, action_type,

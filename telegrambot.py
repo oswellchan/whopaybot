@@ -33,6 +33,8 @@ class TelegramBot:
         dispatcher.add_handler(start_handler)
         newbill_handler = CommandHandler('newbill', self.new_bill)
         dispatcher.add_handler(newbill_handler)
+        done_handler = CommandHandler('done', self.done)
+        dispatcher.add_handler(done_handler)
 
         # Handle callback queries
         callback_handler = CallbackQueryHandler(self.handle_all_callback)
@@ -63,6 +65,30 @@ class TelegramBot:
                     update,
                     trans,
                     action_id=create_bill_handler.ACTION_NEW_BILL
+                )
+        except Exception as e:
+            print(e)
+
+    @run_async
+    def done(self, bot, update):
+        try:
+            conn = self.db.get_connection()
+            with Transaction(conn) as trans:
+                msg = update.message
+                user = msg.from_user
+                trans.add_user(
+                    user.id,
+                    user.first_name,
+                    user.last_name,
+                    user.username
+                )
+                act_type, act_id, subact_id, data = trans.get_session(
+                    msg.chat_id,
+                    msg.from_user.id,
+                )
+                handler = self.get_action_handler(act_type)
+                return handler.execute_done(
+                    bot, update, trans, act_id, subact_id, data
                 )
         except Exception as e:
             print(e)

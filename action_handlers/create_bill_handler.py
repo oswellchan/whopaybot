@@ -32,13 +32,15 @@ ACTION_DELETE_SPECIFIC_TAX = 20
 
 REQUEST_BILL_NAME = "Send me a name for the new bill you want to create."
 REQUEST_ITEM_NAME = "Okay. Send me the name of the item."
+REQUEST_ITEM_NAME_2 = "Got it. Send me the name of the next item you want to add. When you are done adding items, just let me know by sending /done."
 REQUEST_ITEM_PRICE = "Great! Now send me the price of the item. Leave out the currency and provide only the value (e.g. 8.00 or 8)."
-REQUEST_EDIT_ITEM_NAME = "Send me the new name of the item."
-REQUEST_EDIT_ITEM_PRICE = "Send me the new price of the item. Leave out the currency and provide only the value (e.g. 8.00 or 8)."
-REQUEST_TAX_NAME = "Send me the name of the tax."
+REQUEST_EDIT_ITEM_NAME = "Okay. Send me the new name of the item."
+REQUEST_EDIT_ITEM_PRICE = "Okay. Send me the new price of the item. Leave out the currency and provide only the value (e.g. 8.00 or 8)."
+REQUEST_TAX_NAME = "Can do. Send me the name of the tax."
+REQUEST_TAX_NAME_2 = "Got it. Send me the name of the next tax you want to add. When you are done adding taxes, just let me know by sending /done."
 REQUEST_TAX_AMT = "Great! Now send me the tax amount in whole numbers. Leave out the percentage sign (e.g. 7 or 7.00)."
-REQUEST_EDIT_TAX_NAME = "Send me the new name of the tax."
-REQUEST_EDIT_TAX_AMT = "Send me the new tax amount in whole numbers. Leave out the percentage sign (e.g. 7 or 7.00)."
+REQUEST_EDIT_TAX_NAME = "Okay. Send me the new name of the tax."
+REQUEST_EDIT_TAX_AMT = "Can do. Send me the new tax amount in whole numbers. Leave out the percentage sign (e.g. 7 or 7.00)."
 
 ERROR_INVALID_BILL_NAME = "Sorry, the bill name provided is invalid. Name of the bill can only be 250 characters long. Please try again."
 ERROR_SOMETHING_WENT_WRONG = "Sorry, an error has occurred. Please try again in a few moments."
@@ -134,7 +136,23 @@ class BillCreationHandler(ActionHandler):
         if action_id == ACTION_CREATE_BILL_DONE:
             action = CreateBillDone()
 
+        if action is None:
+            return
+
         action.execute(bot, update, trans, subaction_id, data)
+
+    def execute_done(self, bot, update, trans, action_id,
+                     subaction_id=0, data=None):
+        action = None
+        if action_id == ACTION_ADD_ITEMS:
+            action = AddItems()
+        if action_id == ACTION_ADD_TAX:
+            action = AddTax()
+
+        if action is None:
+            return
+
+        action.done(bot, update, trans, subaction_id, data)
 
 
 class CreateNewBill(Action):
@@ -610,6 +628,21 @@ class AddItems(Action):
         if subaction_id == self.ACTION_ADD_ITEM_PRICE:
             return self.add_item_price(bot, update.message, trans, data)
 
+    def done(self, bot, update, trans, subaction_id, data=None):
+        msg = update.message
+        bill_id = data.get(const.JSON_BILL_ID)
+        trans.reset_session(msg.from_user.id, msg.chat_id)
+        return send_bill_response(
+            bot,
+            msg.chat_id,
+            msg.from_user.id,
+            bill_id,
+            trans,
+            keyboard=DisplayModifyItemsKB.get_modify_items_keyboard(
+                bill_id
+            )
+        )
+
     def ask_for_item(self, bot, cbq, bill_id, trans):
         self.set_session(
             cbq.message.chat_id,
@@ -628,8 +661,8 @@ class AddItems(Action):
             if Filters.text.filter(msg):
                 return self.add_item_name(bot, msg, trans, data)
 
-            if Filters.image.filter(msg):
-                return self.add_items_img(bot, msg, trans, data)
+            # if Filters.image.filter(msg):
+            #     return self.add_items_img(bot, msg, trans, data)
 
             # all other message types invalid
             return bot.sendMessage(
@@ -689,16 +722,18 @@ class AddItems(Action):
             if item_name is None:
                 raise Exception('item_name is None')
             trans.add_item(bill_id, item_name, price)
-            trans.reset_session(msg.from_user.id, msg.chat_id)
-            return send_bill_response(
-                bot,
+            self.set_session(
                 msg.chat_id,
-                msg.from_user.id,
-                bill_id,
+                msg.from_user,
+                self.action_type,
+                self.action_id,
+                self.ACTION_PROCESS_ITEMS,
                 trans,
-                keyboard=DisplayModifyItemsKB.get_modify_items_keyboard(
-                    bill_id
-                )
+                data=data
+            )
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=REQUEST_ITEM_NAME_2
             )
         except ValueError as e:
             print(e)
@@ -926,6 +961,21 @@ class AddTax(Action):
         if subaction_id == self.ACTION_ADD_TAX_AMT:
             return self.add_tax_amt(bot, update.message, trans, data)
 
+    def done(self, bot, update, trans, subaction_id, data=None):
+        msg = update.message
+        bill_id = data.get(const.JSON_BILL_ID)
+        trans.reset_session(msg.from_user.id, msg.chat_id)
+        return send_bill_response(
+            bot,
+            msg.chat_id,
+            msg.from_user.id,
+            bill_id,
+            trans,
+            keyboard=DisplayModifyTaxesKB.get_modify_taxes_keyboard(
+                bill_id
+            )
+        )
+
     def ask_for_tax(self, bot, cbq, bill_id, trans):
         self.set_session(
             cbq.message.chat_id,
@@ -991,16 +1041,18 @@ class AddTax(Action):
             if tax_name is None:
                 raise Exception('tax_name is None')
             trans.add_tax(bill_id, tax_name, amt)
-            trans.reset_session(msg.from_user.id, msg.chat_id)
-            return send_bill_response(
-                bot,
+            self.set_session(
                 msg.chat_id,
-                msg.from_user.id,
-                bill_id,
+                msg.from_user,
+                self.action_type,
+                self.action_id,
+                self.ACTION_ADD_TAX_NAME,
                 trans,
-                keyboard=DisplayModifyTaxesKB.get_modify_taxes_keyboard(
-                    bill_id
-                )
+                data=data
+            )
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=REQUEST_TAX_NAME_2
             )
         except (ValueError, BillError) as e:
             print(e)
@@ -1280,6 +1332,23 @@ def get_bill_text(bill_id, user_id, trans):
         return text
     except Exception as e:
         print(e)
+
+
+def get_item_buttons(bill_id, action, trans):
+    keyboard = []
+    items = trans.get_bill_items(bill_id)
+    for item_id, item_name, __ in items:
+        item_btn = InlineKeyboardButton(
+            text=item_name,
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                action,
+                {const.JSON_BILL_ID: bill_id,
+                 const.JSON_ITEM_ID: item_id}
+            )
+        )
+        keyboard.append([item_btn])
+    return keyboard
 
 
 def get_tax_buttons(bill_id, action, trans):
