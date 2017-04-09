@@ -4,8 +4,8 @@ from dotenv import load_dotenv
 
 class EnvSettings:
     def __init__(self):
-        dotenv_path = path.join(path.dirname(__file__), '.env')
-        load_dotenv(dotenv_path)
+        #dotenv_path = path.join(path.dirname(__file__), '.env')
+        #load_dotenv(dotenv_path)
         self.TOKEN = environ.get("TOKEN")
         self.DB_USER = environ.get("DB_USER")
         self.DB_NAME = environ.get("DB_NAME")
