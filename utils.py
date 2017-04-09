@@ -82,9 +82,8 @@ def get_complete_bill_text(bill_id, trans):
         print(e)
 
 
-def get_debts_bill_text(bill_id, trans):
+def format_debts_bill_text(bill_id, debts, unique_users, trans):
     try:
-        debts, unique_users = calculate_remaining_debt(bill_id, trans)
         title, __, __, __ = trans.get_bill_gen_info(bill_id)
         title_text = '<b>{}</b>'.format(escape_html(title))
         title_text += ('   ' + const.EMOJI_PERSON + str(unique_users))
@@ -95,7 +94,7 @@ def get_debts_bill_text(bill_id, trans):
         else:
             for debt in debts:
                 __, fname, lname, uname = debt['creditor']
-                h = '<i>Pay to:</i>\n{}  {}{:.2f}\n\n<i>Paying:</i>'.format(
+                h = '<i>Pay to:</i>\n{}  {}{:.2f}\n\n<i>Amount to pay:</i>'.format(
                     format_name(uname, fname, lname),
                     const.EMOJI_MONEY_BAG,
                     debt['total_amt']
@@ -114,8 +113,16 @@ def get_debts_bill_text(bill_id, trans):
                         debtor['status']
                     )
                 debts_text.append(debt_row)
-        text = title_text + '\n\n' + '\n'.join(debts_text)
+        text = title_text + '\n' + '\n'.join(debts_text)
         return text, ParseMode.HTML
+    except Exception as e:
+        print(e)
+
+
+def get_debts_bill_text(bill_id, trans):
+    try:
+        debts, unique_users = calculate_remaining_debt(bill_id, trans)
+        return format_debts_bill_text(bill_id, debts, unique_users, trans)
     except Exception as e:
         print(e)
 

@@ -3,7 +3,6 @@ from telegram import InlineQueryResultArticle, InputTextMessageContent
 from telegram.inlinekeyboardmarkup import InlineKeyboardMarkup
 from telegram.inlinekeyboardbutton import InlineKeyboardButton
 import constants as const
-import math
 import utils
 
 MODULE_ACTION_TYPE = const.TYPE_SHARE_BILL
@@ -28,6 +27,8 @@ class BillShareHandler(ActionHandler):
             action = ShareBillItem()
         if action_id == ACTION_SHARE_ALL_ITEMS:
             action = ShareAllItems()
+        if action_id == ACTION_PAY_DEBT:
+            action = PayDebt()
         action.execute(bot, update, trans, subaction_id, data)
 
 
@@ -82,8 +83,11 @@ class FindBills(Action):
 
     def get_debt_bill_result(self, bill_id, trans):
         details = trans.get_bill_details(bill_id)
-        text, pm = utils.get_debts_bill_text(bill_id, trans)
-        kb = get_payment_keyboard(bill_id)
+        debts, unique_users = utils.calculate_remaining_debt(bill_id, trans)
+        text, pm = utils.format_debts_bill_text(
+            bill_id, debts, unique_users, trans
+        )
+        kb = get_payment_keyboard(bill_id, debts)
         return InlineQueryResultArticle(
             id=bill_id,
             title=details.get('title'),
@@ -112,8 +116,13 @@ class ShareBillItem(Action):
             item_id = data.get(const.JSON_ITEM_ID)
 
             if not has_rights(trans, data):
-                text, pm = utils.get_debts_bill_text(bill_id, trans)
-                kb = get_payment_keyboard(bill_id)
+                debts, unique_users = utils.calculate_remaining_debt(
+                    bill_id, trans
+                )
+                text, pm = utils.format_debts_bill_text(
+                    bill_id, debts, unique_users, trans
+                )
+                kb = get_payment_keyboard(bill_id, debts)
                 cbq.answer()
                 return cbq.edit_message_text(
                     text=text,
@@ -146,8 +155,13 @@ class ShareAllItems(Action):
             bill_id = data.get(const.JSON_BILL_ID)
 
             if not has_rights(trans, data):
-                text, pm = utils.get_debts_bill_text(bill_id, trans)
-                kb = get_payment_keyboard(bill_id)
+                debts, unique_users = utils.calculate_remaining_debt(
+                    bill_id, trans
+                )
+                text, pm = utils.format_debts_bill_text(
+                    bill_id, debts, unique_users, trans
+                )
+                kb = get_payment_keyboard(bill_id, debts)
                 cbq.answer()
                 return cbq.edit_message_text(
                     text=text,
@@ -178,15 +192,29 @@ class PayDebt(Action):
         if subaction_id == self.ACTION_PAY_DEBT:
             cbq = update.callback_query
             bill_id = data.get(const.JSON_BILL_ID)
-            return self.pay_debt(bot, cbq, bill_id, trans)
+            creditor_id = data.get(const.JSON_CREDITOR_ID)
+            return self.pay_debt(bot, cbq, bill_id, creditor_id, trans)
 
-    def pay_debt(self, bot, cbq, bill_id, trans):
-        debts = trans.get_debts(bill_id)
-        for debt_id, user_id, __, __, __, debt_amt, pending, paid in debts:
-            if user_id == cbq.from_user.id:
-                if (math.isclose(debt_amt, 0) or paid is not None):
-                    return
-                trans.add_payment(debt_id, )
+    def pay_debt(self, bot, cbq, bill_id, creditor_id, trans):
+        trans.add_payment_by_bill(
+            const.PAY_TYPE_NORMAL,
+            bill_id,
+            creditor_id,
+            cbq.from_user.id
+        )
+        debts, unique_users = utils.calculate_remaining_debt(
+            bill_id, trans
+        )
+        text, pm = utils.format_debts_bill_text(
+            bill_id, debts, unique_users, trans
+        )
+        kb = get_payment_keyboard(bill_id, debts)
+        cbq.answer()
+        cbq.edit_message_text(
+            text=text,
+            parse_mode=pm,
+            reply_markup=kb
+        )
 
 
 def get_share_keyboard(bill_id, action, trans):
@@ -216,24 +244,27 @@ def get_share_keyboard(bill_id, action, trans):
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_payment_keyboard(bill_id):
-    pay_btn = InlineKeyboardButton(
-        text='Pay',
-        callback_data=utils.get_action_callback_data(
-            MODULE_ACTION_TYPE,
-            ACTION_PAY_DEBT,
-            {const.JSON_BILL_ID: bill_id}
+def get_payment_keyboard(bill_id, debts):
+    kb = []
+    for debt in debts:
+        credtr = debt['creditor']
+        pay_btn = InlineKeyboardButton(
+            text='Pay ' + utils.format_name(credtr[3], credtr[1], credtr[2]),
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_PAY_DEBT,
+                {const.JSON_BILL_ID: bill_id,
+                 const.JSON_CREDITOR_ID: credtr[0]}
+            )
         )
-    )
+        kb.append([pay_btn])
     inspect_btn = InlineKeyboardButton(
         text='Inspect bill',
         url='https://telegram.me/WhoPayBot?start=' + bill_id
     )
+    kb.append([inspect_btn])
 
-    return InlineKeyboardMarkup([
-        [pay_btn],
-        [inspect_btn]
-    ])
+    return InlineKeyboardMarkup(kb)
 
 
 def has_rights(trans, data):

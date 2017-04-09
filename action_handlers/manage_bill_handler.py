@@ -14,7 +14,8 @@ ACTION_SHARE_BILL = 2
 ACTION_CALCULATE_SPLIT = 3
 ACTION_REFRESH_BILL = 4
 ACTION_SEND_DEBTS_BILL_ADMIN = 5
-ACTION_CONFIRM_BILL_PAYMENT = 6
+ACTION_GET_CONFIRM_PAYMENTS_KB = 6
+ACTION_CONFIRM_BILL_PAYMENT = 7
 
 REQUEST_CALC_SPLIT_CONFIRMATION = "You are about to calculate the splitting of the bill. Once this is done, no new person can be added to the bill anymore. Do you wish to continue? Reply 'yes' or 'no'."
 ERROR_INVALID_CONFIRMATION = "Sorry, I could not understand the message. Reply 'yes' to continue or 'no' to cancel."
@@ -37,6 +38,10 @@ class BillManagementHandler(ActionHandler):
             action = RefreshBill()
         if action_id == ACTION_CALCULATE_SPLIT:
             action = CalculateBillSplit()
+        if action_id == ACTION_GET_CONFIRM_PAYMENTS_KB:
+            action = DisplayConfirmPaymentsKB()
+        if action_id == ACTION_CONFIRM_BILL_PAYMENT:
+            action = ConfirmPayment()
         action.execute(bot, update, trans, subaction_id, data)
 
 
@@ -279,6 +284,56 @@ class CalculateBillSplit(Action):
             print(e)
 
 
+class DisplayConfirmPaymentsKB(Action):
+    ACTION_DISPLAY_PAYMENTS_KB = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_GET_CONFIRM_PAYMENTS_KB)
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_DISPLAY_PAYMENTS_KB:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            creditor_id = cbq.from_user.id
+            return cbq.edit_message_reply_markup(
+                reply_markup=self.get_confirm_payments_keyboard(
+                    bill_id, creditor_id, trans
+                )
+            )
+
+    @staticmethod
+    def get_confirm_payments_keyboard(bill_id, creditor_id, trans):
+        pending = trans.get_pending_payments(bill_id, creditor_id)
+
+        kb = []
+        for payment in pending:
+            btn = InlineKeyboardButton(
+                text='{}  {}{:.4f}'.format(
+                    utils.format_name(payment[4], payment[2], payment[3]),
+                    const.EMOJI_MONEY_BAG,
+                    payment[1],
+                ),
+                callback_data=utils.get_action_callback_data(
+                    MODULE_ACTION_TYPE,
+                    ACTION_CONFIRM_BILL_PAYMENT,
+                    {const.JSON_BILL_ID: bill_id,
+                     const.JSON_PAYMENT_ID: payment[0]}
+                )
+            )
+            kb.append([btn])
+
+        back_btn = InlineKeyboardButton(
+            text="Back",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_REFRESH_BILL,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        kb.append([back_btn])
+        return InlineKeyboardMarkup(kb)
+
+
 class SendDebtsBillAdmin(Action):
     ACTION_SEND_DEBTS_BILL = 0
 
@@ -320,7 +375,7 @@ class SendDebtsBillAdmin(Action):
             text="Confirm Payments",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
-                ACTION_CONFIRM_BILL_PAYMENT,
+                ACTION_GET_CONFIRM_PAYMENTS_KB,
                 {const.JSON_BILL_ID: bill_id}
             )
         )
@@ -331,6 +386,34 @@ class SendDebtsBillAdmin(Action):
         )
         text, pm = utils.get_debts_bill_text(bill_id, trans)
         return text, pm, kb
+
+
+class ConfirmPayment(Action):
+    ACTION_CONFIRM_PAYMENT = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_CONFIRM_BILL_PAYMENT)
+
+    def execute(self, bot, update, trans, subaction_id=0, data=None):
+        if subaction_id == self.ACTION_CONFIRM_PAYMENT:
+            bill_id = data.get(const.JSON_BILL_ID)
+            payment_id = data.get(const.JSON_PAYMENT_ID)
+            self.confirm_payment(
+                bot, bill_id, payment_id, update.callback_query, trans
+            )
+
+    def confirm_payment(self, bot, bill_id, payment_id, cbq, trans):
+        trans.confirm_payment(payment_id)
+        text, pm = utils.get_debts_bill_text(bill_id, trans)
+        kb = DisplayConfirmPaymentsKB.get_confirm_payments_keyboard(
+            bill_id, cbq.from_user.id, trans
+        )
+        cbq.answer()
+        cbq.edit_message_text(
+            text=text,
+            parse_mode=pm,
+            reply_markup=kb
+        )
 
 
 def evaluate_rights(update, trans, data):
