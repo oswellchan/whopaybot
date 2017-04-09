@@ -6,7 +6,6 @@ from telegrambot import TelegramBot
 if __name__ == '__main__':
     print('hello world')
     settings = EnvSettings()
-    print('db')
     db = Database(
         settings.DB_HOST,
         settings.DB_NAME,
