@@ -152,6 +152,7 @@ class TelegramBot:
                 if action_type is None:
                     return cbq.answer('nothing')
                 handler = self.get_action_handler(action_type)
+                print("Dispatched: " + str(datetime.datetime.now().time()))
                 return handler.execute(
                     bot, update, trans, action_id, 0, payload
                 )
