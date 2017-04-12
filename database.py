@@ -144,7 +144,8 @@ class Transaction:
                     ON CONFLICT(id) DO NOTHING;
                 """, (bill_id, title, owner_id)
                 )
-                if self.cursor.rowcount > 0:
+                rows = self.cursor.fetchall()
+                if len(rows) > 0:
                     return bill_id
 
                 count += 1
@@ -165,7 +166,8 @@ class Transaction:
             """, (bill_id, user_id)
             )
 
-            if self.cursor.rowcount < 1:
+            rows = self.cursor.fetchall()
+            if len(rows) < 1:
                 raise Exception('Add item failed')
         except Exception as e:
             self.is_error = True
@@ -180,7 +182,8 @@ class Transaction:
             """, (bill_id, item_name, price)
             )
 
-            if self.cursor.rowcount < 1:
+            rows = self.cursor.fetchall()
+            if len(rows) < 1:
                 raise Exception('Add item failed')
         except Exception as e:
             self.is_error = True
@@ -250,7 +253,8 @@ class Transaction:
                 """, (bill_id,)
             )
 
-            if self.cursor.rowcount != 1:
+            rows = self.cursor.fetchall()
+            if len(rows) != 1:
                 raise Exception('More or less than 1 bill found')
 
             return self.cursor.fetchone()
@@ -305,7 +309,8 @@ class Transaction:
             """, (name, item_id, item_id, bill_id, user_id)
             )
 
-            count = self.cursor.rowcount
+            rows = self.cursor.fetchall()
+            count = len(rows)
             if count != 1:
                 raise Exception("Updated rows not expected. '{}'".format(count))
         except Exception as e:
@@ -330,7 +335,7 @@ class Transaction:
             """, (price, item_id, item_id, bill_id, user_id)
             )
 
-            count = self.cursor.rowcount
+            count = len(self.cursor.fetchall())
             if count != 1:
                 raise Exception("Updated rows not expected. '{}'".format(count))
         except Exception as e:
@@ -355,7 +360,7 @@ class Transaction:
             """, (item_id, item_id, bill_id, user_id)
             )
 
-            count = self.cursor.rowcount
+            count = len(self.cursor.fetchall())
             if count != 1:
                 raise Exception("Deleted rows not expected. '{}'".format(count))
         except Exception as e:
@@ -386,7 +391,8 @@ class Transaction:
             """, (bill_id, tax_name, amt)
             )
 
-            if self.cursor.rowcount < 1:
+            rows = self.cursor.fetchall()
+            if len(rows) < 1:
                 raise Exception('Add tax failed')
         except Exception as e:
             self.is_error = True
@@ -424,7 +430,7 @@ class Transaction:
             """, (name, tax_id, tax_id, bill_id, user_id)
             )
 
-            count = self.cursor.rowcount
+            count = len(self.cursor.fetchall())
             if count != 1:
                 raise Exception("Updated rows not expected. '{}'".format(count))
         except Exception as e:
@@ -449,7 +455,7 @@ class Transaction:
             """, (amt, tax_id, tax_id, bill_id, user_id)
             )
 
-            count = self.cursor.rowcount
+            count = len(self.cursor.fetchall())
             if count != 1:
                 raise Exception("Updated rows not expected. '{}'".format(count))
         except Exception as e:
@@ -474,7 +480,7 @@ class Transaction:
             """, (tax_id, tax_id, bill_id, user_id)
             )
 
-            count = self.cursor.rowcount
+            count = len(self.cursor.fetchall())
             if count != 1:
                 raise Exception("Deleted rows not expected. '{}'".format(count))
         except Exception as e:
@@ -510,7 +516,8 @@ class Transaction:
             """, (bill_id, item_id, user_id)
             )
 
-            if self.cursor.rowcount < 1:
+            rows = self.cursor.fetchall()
+            if len(rows) < 1:
                 raise Exception('Add bill_share fail')
         except Exception as e:
             self.is_error = True
@@ -572,7 +579,7 @@ class Transaction:
                         RETURNING id"""
             self.cursor.execute(query, tuple(values))
 
-            if self.cursor.rowcount != len(debtors):
+            if len(self.cursor.fetchall()) != len(debtors):
                 raise Exception('Error in debtor adding')
         except Exception as e:
             self.is_error = True
@@ -710,7 +717,8 @@ class Transaction:
                 RETURNING id
             """, (payment_id,)
             )
-            if self.cursor.rowcount != 1:
+            rows = self.cursor.fetchall()
+            if len(rows) != 1:
                 raise Exception('Less or more than 1 confirmed')
         except Exception as e:
             self.is_error = True
