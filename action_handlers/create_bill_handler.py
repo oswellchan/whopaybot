@@ -7,6 +7,7 @@ from action_handlers.action_handler import ActionHandler, Action
 from action_handlers import manage_bill_handler
 import constants as const
 import utils
+import logging
 
 MODULE_ACTION_TYPE = const.TYPE_CREATE_BILL
 
@@ -210,13 +211,13 @@ class CreateNewBill(Action):
                 keyboard=DisplayNewBillKB.get_new_bill_keyboard(bill_id)
             )
         except BillError as e:
-            print(e)
+            logging.exception('add_bill_name')
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=str(e)
             )
         except Exception as e:
-            print(e)
+            logging.exception('add_bill_name')
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=ERROR_SOMETHING_WENT_WRONG
@@ -670,12 +671,13 @@ class AddItems(Action):
                 text=ERROR_INVALID_ITEM_NAME
             )
         except BillError as e:
+            logging.exception('add_item')
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=str(e)
             )
         except Exception as e:
-            print(e)
+            logging.exception('add_item')
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=ERROR_SOMETHING_WENT_WRONG
@@ -736,13 +738,13 @@ class AddItems(Action):
                 text=REQUEST_ITEM_NAME_2
             )
         except ValueError as e:
-            print(e)
+            logging.exception('add_item_price')
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=ERROR_INVALID_FLOAT_VALUE.format('item price')
             )
         except Exception as e:
-            print(e)
+            logging.exception('add_item_price')
 
     def add_items_img(self, msg, bot, trans, data):
         pass
@@ -823,7 +825,7 @@ class EditItemName(Action):
                 )
             )
         except Exception as e:
-            print(e)
+            logging.exception('edit_item_name')
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=ERROR_SOMETHING_WENT_WRONG
@@ -901,13 +903,13 @@ class EditItemPrice(Action):
                 )
             )
         except ValueError as e:
-            print(e)
+            logging.exception('edit_item_price')
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=ERROR_INVALID_FLOAT_VALUE.format('item price')
             )
         except Exception as e:
-            print(e)
+            logging.exception('edit_item_price')
 
 
 class DeleteItem(Action):
@@ -1016,12 +1018,13 @@ class AddTax(Action):
                 text=REQUEST_TAX_AMT
             )
         except BillError as e:
+            logging.exception('add_tax_name')
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=str(e)
             )
         except Exception as e:
-            print(e)
+            logging.exception('add_tax_name')
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=ERROR_SOMETHING_WENT_WRONG
@@ -1055,13 +1058,13 @@ class AddTax(Action):
                 text=REQUEST_TAX_NAME_2
             )
         except (ValueError, BillError) as e:
-            print(e)
+            logging.exception('add_tax_amt')
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=ERROR_INVALID_FLOAT_VALUE.format('tax amount')
             )
         except Exception as e:
-            print(e)
+            logging.exception('add_tax_amt')
 
 
 class EditTaxName(Action):
@@ -1139,7 +1142,7 @@ class EditTaxName(Action):
                 )
             )
         except Exception as e:
-            print(e)
+            logging.exception('edit_tax_name')
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=ERROR_SOMETHING_WENT_WRONG
@@ -1217,13 +1220,13 @@ class EditTaxAmt(Action):
                 )
             )
         except ValueError as e:
-            print(e)
+            logging.exception('edit_tax_amt')
             return bot.sendMessage(
                 chat_id=msg.chat_id,
                 text=ERROR_INVALID_FLOAT_VALUE.format('tax amount')
             )
         except Exception as e:
-            print(e)
+            logging.exception('edit_tax_amt')
 
 
 class DeleteTax(Action):
@@ -1331,7 +1334,7 @@ def get_bill_text(bill_id, user_id, trans):
         text += '\n\n' + 'Total: ' + "{:.2f}".format(total)
         return text
     except Exception as e:
-        print(e)
+        logging.exception('get_bill_text')
 
 
 def get_item_buttons(bill_id, action, trans):

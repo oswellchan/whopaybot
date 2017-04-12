@@ -5,7 +5,7 @@ from database import Transaction
 from action_handlers import create_bill_handler, manage_bill_handler, share_bill_handler
 import json
 import constants as const
-
+import logging
 
 PRIVATE_CHAT = 'private'
 
@@ -29,7 +29,7 @@ class TelegramBot:
 
     def init_handlers(self, dispatcher):
         # Command handlers
-        start_handler = CommandHandler('start', self.start)
+        start_handler = CommandHandler('start', self.start, pass_args=True)
         dispatcher.add_handler(start_handler)
         newbill_handler = CommandHandler('newbill', self.new_bill)
         dispatcher.add_handler(newbill_handler)
@@ -49,8 +49,11 @@ class TelegramBot:
         dispatcher.add_handler(message_handler)
 
     @run_async
-    def start(self, bot, update):
+    def start(self, bot, update, args):
         # TODO: make command list screen
+        if args is not None and len(args) == 1:
+            # send the thing
+            pass
         bot.sendMessage(chat_id=update.message.chat_id, text="Start screen")
 
     @run_async
@@ -67,7 +70,7 @@ class TelegramBot:
                     action_id=create_bill_handler.ACTION_NEW_BILL
                 )
         except Exception as e:
-            print(e)
+            logging.exception('new_bill')
 
     @run_async
     def done(self, bot, update):
@@ -91,7 +94,7 @@ class TelegramBot:
                     bot, update, trans, act_id, subact_id, data
                 )
         except Exception as e:
-            print(e)
+            logging.exception('done')
 
     @run_async
     def handle_all_msg(self, bot, update):
@@ -118,9 +121,9 @@ class TelegramBot:
                         bot, update, trans, act_id, subact_id, data
                     )
                 except Exception as e:
-                    print(e)
+                    logging.exception('inner handle_all_msg')
         except Exception as e:
-            print(e)
+            logging.exception('handle_all_msg')
 
     @run_async
     def handle_all_callback(self, bot, update):
@@ -156,7 +159,7 @@ class TelegramBot:
                     bot, update, trans, action_id, 0, payload
                 )
         except Exception as e:
-            print(e)
+            logging.exception('handle_all_callback')
 
     @run_async
     def handle_inline(self, bot, update):
@@ -178,7 +181,7 @@ class TelegramBot:
                     action_id=share_bill_handler.ACTION_FIND_BILLS
                 )
         except Exception as e:
-            print(e)
+            logging.exception('handle_inline')
 
     def get_action_handler(self, action_type):
         if action_type == create_bill_handler.MODULE_ACTION_TYPE:

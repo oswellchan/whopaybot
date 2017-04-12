@@ -1,9 +1,14 @@
 from settings import EnvSettings
 from database import Database
 from telegrambot import TelegramBot
+import logging
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO
+    )
     settings = EnvSettings()
     db = Database(
         settings.DB_HOST,

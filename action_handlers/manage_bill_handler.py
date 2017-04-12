@@ -1,10 +1,12 @@
 from action_handlers.action_handler import ActionHandler, Action
+from action_handlers.share_bill_handler import get_payment_keyboard
 from telegram.ext import Filters
-from telegram.parsemode import ParseMode
 from telegram.inlinekeyboardmarkup import InlineKeyboardMarkup
 from telegram.inlinekeyboardbutton import InlineKeyboardButton
+from telegram.error import BadRequest
 import constants as const
 import utils
+import logging
 
 MODULE_ACTION_TYPE = const.TYPE_MANAGE_BILL
 
@@ -16,6 +18,7 @@ ACTION_REFRESH_BILL = 4
 ACTION_SEND_DEBTS_BILL_ADMIN = 5
 ACTION_GET_CONFIRM_PAYMENTS_KB = 6
 ACTION_CONFIRM_BILL_PAYMENT = 7
+ACTION_SEND_DEBTS_BILL = 8
 
 REQUEST_CALC_SPLIT_CONFIRMATION = "You are about to calculate the splitting of the bill. Once this is done, no new person can be added to the bill anymore. Do you wish to continue? Reply 'yes' or 'no'."
 ERROR_INVALID_CONFIRMATION = "Sorry, I could not understand the message. Reply 'yes' to continue or 'no' to cancel."
@@ -68,16 +71,21 @@ class SendCompleteBill(Action):
             return self.send_bill_response(bot, cbq, bill_id, trans)
 
     def send_bill_response(self, bot, cbq, bill_id, trans):
-        chat_id = cbq.message.chat_id
-        text, pm = utils.get_complete_bill_text(bill_id, trans)
-        keyboard = DisplayManageBillKB.get_manage_bill_keyboard(bill_id, trans)
-        trans.reset_session(cbq.from_user.id, chat_id)
-        cbq.answer()
-        cbq.edit_message_text(
-            text=text,
-            parse_mode=pm,
-            reply_markup=keyboard
-        )
+        try:
+            chat_id = cbq.message.chat_id
+            text, pm = utils.get_complete_bill_text(bill_id, trans)
+            kb = DisplayManageBillKB.get_manage_bill_keyboard(bill_id, trans)
+            trans.reset_session(cbq.from_user.id, chat_id)
+            cbq.answer()
+            cbq.edit_message_text(
+                text=text,
+                parse_mode=pm,
+                reply_markup=kb
+            )
+        except BadRequest as e:
+            print(e)
+        except Exception as e:
+            logging.exception('RefreshBill')
 
 
 class DisplayManageBillKB(Action):
@@ -152,14 +160,19 @@ class RefreshBill(Action):
                 return self.refresh_debts_bill(update, trans, data)
 
     def refresh_debts_bill(self, update, trans, data):
-        bill_id = data.get(const.JSON_BILL_ID)
-        txt, pm, kb = SendDebtsBillAdmin.get_debts_bill_msg(bill_id, trans)
-        update.callback_query.answer()
-        update.callback_query.edit_message_text(
-            text=txt,
-            parse_mode=pm,
-            reply_markup=kb
-        )
+        try:
+            bill_id = data.get(const.JSON_BILL_ID)
+            txt, pm, kb = SendDebtsBill.get_debts_bill_msg(bill_id, trans)
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(
+                text=txt,
+                parse_mode=pm,
+                reply_markup=kb
+            )
+        except BadRequest as e:
+            print(e)
+        except Exception as e:
+            logging.exception('RefreshBill')
 
 
 class CalculateBillSplit(Action):
@@ -230,7 +243,7 @@ class CalculateBillSplit(Action):
                 text=ERROR_INVALID_CONFIRMATION
             )
         except Exception as e:
-            print(e)
+            logging.exception('process_split_bill')
 
     def send_manage_bill(self, bot, bill_id, chat_id, user_id, trans):
         text, pm = utils.get_complete_bill_text(bill_id, trans)
@@ -281,7 +294,7 @@ class CalculateBillSplit(Action):
             )
             return SendDebtsBillAdmin().execute(bot, update, trans, data=data)
         except Exception as e:
-            print(e)
+            logging.exception('split_bill')
 
 
 class DisplayConfirmPaymentsKB(Action):
@@ -332,6 +345,103 @@ class DisplayConfirmPaymentsKB(Action):
         )
         kb.append([back_btn])
         return InlineKeyboardMarkup(kb)
+
+
+class SendDebtsBill(Action):
+    ACTION_SEND_DEBTS_BILL = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_SEND_DEBTS_BILL)
+
+    def execute(self, bot, update, trans, subaction_id=0, data=None):
+        if subaction_id == self.ACTION_SEND_DEBTS_BILL:
+            bill_id = data.get(const.JSON_BILL_ID)
+            __, owner_id, __, is_closed = trans.get_bill_gen_info(bill_id)
+
+            if not is_closed:
+                return
+
+            msg = update.message
+            if msg.from_user.id == owner_id:
+                return SendDebtsBillAdmin().execute(
+                    bot, update, trans, subaction_id, data
+                )
+
+            return self.send_debts_bill(bot, bill_id, msg, trans)
+
+    def send_debts_bill(self, bot, bill_id, msg, trans):
+        debts, unique_users = utils.calculate_remaining_debt(bill_id, trans)
+        text, pm = utils.format_debts_bill_text(
+            bill_id, debts, unique_users, trans
+        )
+        kb = get_payment_keyboard(bill_id, debts)
+        summary_btn = InlineKeyboardButton(
+            text="Bill Summary",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_REFRESH_BILL,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        by_user_btn = InlineKeyboardButton(
+            text="Inspect Bill by Person",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_REFRESH_BILL,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        by_item_btn = InlineKeyboardButton(
+            text="Inspect Bill by Item",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_CONFIRM_PAYMENTS_KB,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        kb.inline_keyboard.extend([
+            [summary_btn],
+            [by_user_btn],
+            [by_item_btn]
+        ])
+        trans.reset_session(msg.chat_id, msg.from_user.id)
+        bot.sendMessage(
+            chat_id=msg.chat_id,
+            text=text,
+            parse_mode=pm,
+            reply_markup=kb
+        )
+
+    @staticmethod
+    def get_debts_bill_msg(bill_id, trans):
+        bill_name, __, __, __ = trans.get_bill_gen_info(bill_id)
+        share_btn = InlineKeyboardButton(
+            text="Share Bill",
+            switch_inline_query=bill_name
+        )
+        refresh_btn = InlineKeyboardButton(
+            text="Refresh Bill",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_REFRESH_BILL,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        confirm_btn = InlineKeyboardButton(
+            text="Confirm Payments",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_CONFIRM_PAYMENTS_KB,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        kb = InlineKeyboardMarkup(
+            [[share_btn],
+             [refresh_btn],
+             [confirm_btn]]
+        )
+        text, pm = utils.get_debts_bill_text(bill_id, trans)
+        return text, pm, kb
 
 
 class SendDebtsBillAdmin(Action):

@@ -1,15 +1,8 @@
 from telegram.parsemode import ParseMode
-import os
-import sys
 import json
 import constants as const
 import math
-
-
-def print_error():
-    exc_type, exc_obj, exc_tb = sys.exc_info()
-    fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-    print(exc_type, fname, exc_tb.tb_lineno)
+import logging
 
 
 def get_action_callback_data(action_type, action_id, data):
@@ -71,7 +64,7 @@ def format_complete_bill_text(bill, bill_id, trans):
         text += '\n\n' + 'Total: ' + "{:.2f}".format(total)
         return text, ParseMode.HTML
     except Exception as e:
-        print(e)
+        logging.exception('format_complete_bill_text')
 
 
 def get_complete_bill_text(bill_id, trans):
@@ -79,7 +72,7 @@ def get_complete_bill_text(bill_id, trans):
         bill = trans.get_bill_details(bill_id)
         return format_complete_bill_text(bill, bill_id, trans)
     except Exception as e:
-        print(e)
+        logging.exception('get_complete_bill_text')
 
 
 def format_debts_bill_text(bill_id, debts, unique_users, trans):
@@ -112,11 +105,11 @@ def format_debts_bill_text(bill_id, debts, unique_users, trans):
                         debtor['orig_amt'],
                         debtor['status']
                     )
-                debts_text.append(debt_row)
+                    debts_text.append(debt_row)
         text = title_text + '\n' + '\n'.join(debts_text)
         return text, ParseMode.HTML
     except Exception as e:
-        print(e)
+        logging.exception('format_debts_bill_text')
 
 
 def get_debts_bill_text(bill_id, trans):
@@ -124,7 +117,7 @@ def get_debts_bill_text(bill_id, trans):
         debts, unique_users = calculate_remaining_debt(bill_id, trans)
         return format_debts_bill_text(bill_id, debts, unique_users, trans)
     except Exception as e:
-        print(e)
+        logging.exception('get_debts_bill_text')
 
 
 def calculate_remaining_debt(bill_id, trans):
@@ -171,7 +164,7 @@ def calculate_remaining_debt(bill_id, trans):
             elif math.isclose(debtor['amt'], 0):
                 debtor['amt'] = 0
                 debtor['status'] = '(Paid)'
-            results['debtors'].append(debtor)
+            result['debtors'].append(debtor)
 
             # Reset debtor info with new info
             is_pending = False
