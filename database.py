@@ -257,7 +257,7 @@ class Transaction:
             if len(rows) != 1:
                 raise Exception('More or less than 1 bill found')
 
-            return self.cursor.fetchone()
+            return rows[0]
         except Exception as e:
             self.is_error = True
             raise e
