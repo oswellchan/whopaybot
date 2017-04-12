@@ -128,7 +128,7 @@ class TelegramBot:
 
     @run_async
     def handle_all_callback(self, bot, update):
-        print("Received: " + str(datetime.datetime.now().time()))
+        print("1. Received: " + str(datetime.datetime.now().time()))
         try:
             cbq = update.callback_query
             data = cbq.data
@@ -152,7 +152,7 @@ class TelegramBot:
                 if action_type is None:
                     return cbq.answer('nothing')
                 handler = self.get_action_handler(action_type)
-                print("Dispatched: " + str(datetime.datetime.now().time()))
+                print("2. Dispatched: " + str(datetime.datetime.now().time()))
                 return handler.execute(
                     bot, update, trans, action_id, 0, payload
                 )

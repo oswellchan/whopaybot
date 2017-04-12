@@ -112,7 +112,7 @@ class ShareBillItem(Action):
 
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_SHARE_ITEM:
-            print("Parsing: " + str(datetime.datetime.now().time()))
+            print("3. Parsing: " + str(datetime.datetime.now().time()))
             cbq = update.callback_query
             bill_id = data.get(const.JSON_BILL_ID)
             item_id = data.get(const.JSON_ITEM_ID)
@@ -133,15 +133,15 @@ class ShareBillItem(Action):
                 )
 
             self.share_bill_item(bot, cbq, bill_id, item_id, trans)
-            print("Sent: " + str(datetime.datetime.now().time()))
+            print("7. Sent: " + str(datetime.datetime.now().time()))
 
     def share_bill_item(self, bot, cbq, bill_id, item_id, trans):
-        print("Toggle share: " + str(datetime.datetime.now().time()))
+        print("4. Toggle share: " + str(datetime.datetime.now().time()))
         trans.toggle_bill_share(bill_id, item_id, cbq.from_user.id)
-        print("Toggled: " + str(datetime.datetime.now().time()))
+        print("5. Toggled: " + str(datetime.datetime.now().time()))
         text, pm = utils.get_complete_bill_text(bill_id, trans)
         kb = get_share_keyboard(bill_id, ACTION_SHARE_BILL_ITEM, trans)
-        print("Prepared: " + str(datetime.datetime.now().time()))
+        print("6. Prepared: " + str(datetime.datetime.now().time()))
         cbq.edit_message_text(
             text=text,
             parse_mode=pm,
@@ -157,7 +157,7 @@ class ShareAllItems(Action):
 
     def execute(self, bot, update, trans, subaction_id, data=None):
         if subaction_id == self.ACTION_SHARE_ALL:
-            print("Parsing: " + str(datetime.datetime.now().time()))
+            print("3. Parsing: " + str(datetime.datetime.now().time()))
             cbq = update.callback_query
             bill_id = data.get(const.JSON_BILL_ID)
 
@@ -177,15 +177,15 @@ class ShareAllItems(Action):
                 )
 
             self.share_all_items(bot, cbq, bill_id, trans)
-            print("Sent: " + str(datetime.datetime.now().time()))
+            print("7. Sent: " + str(datetime.datetime.now().time()))
 
     def share_all_items(self, bot, cbq, bill_id, trans):
-        print("Toggle share: " + str(datetime.datetime.now().time()))
+        print("4. Toggle share: " + str(datetime.datetime.now().time()))
         trans.toggle_all_bill_shares(bill_id, cbq.from_user.id)
-        print("Toggled: " + str(datetime.datetime.now().time()))
+        print("5. Toggled: " + str(datetime.datetime.now().time()))
         text, pm = utils.get_complete_bill_text(bill_id, trans)
         kb = get_share_keyboard(bill_id, ACTION_SHARE_BILL_ITEM, trans)
-        print("Prepared: " + str(datetime.datetime.now().time()))
+        print("6. Prepared: " + str(datetime.datetime.now().time()))
         cbq.edit_message_text(
             text=text,
             parse_mode=pm,
