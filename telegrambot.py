@@ -7,6 +7,7 @@ import json
 import constants as const
 import logging
 import datetime
+from threading import Thread
 
 PRIVATE_CHAT = 'private'
 
@@ -151,12 +152,14 @@ class TelegramBot:
 
                 if action_type is None:
                     return cbq.answer('nothing')
-                print("1.1. Find handler: " + str(datetime.datetime.now().time()))  
+                print("1.1. Find handler: " + str(datetime.datetime.now().time()))
                 handler = self.get_action_handler(action_type)
-                print("2. Dispatched: " + str(datetime.datetime.now().time()))
-                return handler.execute(
-                    bot, update, trans, action_id, 0, payload
+                t = Thread(
+                    target=handler.execute,
+                    args=(bot, update, trans, action_id, 0, payload)
                 )
+                print("2. Dispatched: " + str(datetime.datetime.now().time()))
+                t.start()
         except Exception as e:
             logging.exception('handle_all_callback')
 
