@@ -143,11 +143,6 @@ class TelegramBot:
                     user.last_name,
                     user.username
                 )
-                if cbq.message is not None:
-                    trans.get_session(  # create lock to prevent concurrent requests
-                        cbq.message.chat_id,
-                        cbq.from_user.id
-                    )
                 payload = json.loads(data)
                 action_type = payload.get(const.JSON_ACTION_TYPE)
                 action_id = payload.get(const.JSON_ACTION_ID)
