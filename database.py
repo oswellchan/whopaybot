@@ -252,8 +252,9 @@ class Transaction:
                 WHERE b.id = %s
                 """, (bill_id,)
             )
-
+            print(bill_id)
             rows = self.cursor.fetchall()
+            print(rows)
             if len(rows) != 1:
                 raise Exception('More or less than 1 bill found')
 
