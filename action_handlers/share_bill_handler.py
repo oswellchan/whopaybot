@@ -138,6 +138,7 @@ class ShareBillItem(Action):
         trans.toggle_bill_share(bill_id, item_id, cbq.from_user.id)
         text, pm = utils.get_complete_bill_text(bill_id, trans)
         kb = get_share_keyboard(bill_id, ACTION_SHARE_BILL_ITEM, trans)
+        print("Prepared: " + str(datetime.datetime.now().time()))
         cbq.edit_message_text(
             text=text,
             parse_mode=pm,
@@ -178,6 +179,7 @@ class ShareAllItems(Action):
         trans.toggle_all_bill_shares(bill_id, cbq.from_user.id)
         text, pm = utils.get_complete_bill_text(bill_id, trans)
         kb = get_share_keyboard(bill_id, ACTION_SHARE_BILL_ITEM, trans)
+        print("Prepared: " + str(datetime.datetime.now().time()))
         cbq.edit_message_text(
             text=text,
             parse_mode=pm,
