@@ -4,6 +4,7 @@ from telegram.inlinekeyboardmarkup import InlineKeyboardMarkup
 from telegram.inlinekeyboardbutton import InlineKeyboardButton
 import constants as const
 import utils
+import datetime
 
 MODULE_ACTION_TYPE = const.TYPE_SHARE_BILL
 
@@ -130,7 +131,8 @@ class ShareBillItem(Action):
                     reply_markup=kb
                 )
 
-            return self.share_bill_item(bot, cbq, bill_id, item_id, trans)
+            self.share_bill_item(bot, cbq, bill_id, item_id, trans)
+            print("Sent: " + str(datetime.datetime.now().time()))
 
     def share_bill_item(self, bot, cbq, bill_id, item_id, trans):
         trans.toggle_bill_share(bill_id, item_id, cbq.from_user.id)
@@ -169,7 +171,8 @@ class ShareAllItems(Action):
                     reply_markup=kb
                 )
 
-            return self.share_all_items(bot, cbq, bill_id, trans)
+            self.share_all_items(bot, cbq, bill_id, trans)
+            print("Sent: " + str(datetime.datetime.now().time()))
 
     def share_all_items(self, bot, cbq, bill_id, trans):
         trans.toggle_all_bill_shares(bill_id, cbq.from_user.id)

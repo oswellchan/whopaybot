@@ -6,6 +6,7 @@ from action_handlers import create_bill_handler, manage_bill_handler, share_bill
 import json
 import constants as const
 import logging
+import datetime
 
 PRIVATE_CHAT = 'private'
 
@@ -127,6 +128,7 @@ class TelegramBot:
 
     @run_async
     def handle_all_callback(self, bot, update):
+        print("Received: " + str(datetime.datetime.now().time()))
         try:
             cbq = update.callback_query
             data = cbq.data
