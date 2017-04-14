@@ -1,12 +1,13 @@
 from action_handlers.action_handler import ActionHandler, Action
-from action_handlers.share_bill_handler import get_payment_keyboard
 from telegram.ext import Filters
 from telegram.inlinekeyboardmarkup import InlineKeyboardMarkup
 from telegram.inlinekeyboardbutton import InlineKeyboardButton
 from telegram.error import BadRequest
 import constants as const
 import utils
+import datetime
 import logging
+import counter
 
 MODULE_ACTION_TYPE = const.TYPE_MANAGE_BILL
 
@@ -19,6 +20,13 @@ ACTION_SEND_DEBTS_BILL_ADMIN = 5
 ACTION_GET_CONFIRM_PAYMENTS_KB = 6
 ACTION_CONFIRM_BILL_PAYMENT = 7
 ACTION_SEND_DEBTS_BILL = 8
+ACTION_SEND_BILL = 9
+ACTION_SHARE_BILL_ITEM = 10
+ACTION_SHARE_ALL_ITEMS = 11
+ACTION_GET_SHARE_ITEMS_KB = 12
+ACTION_GET_PAY_ITEMS_KB = 13
+ACTION_PAY_DEBT = 14
+ACTION_GET_INSPECT_BILL_KB = 15
 
 REQUEST_CALC_SPLIT_CONFIRMATION = "You are about to calculate the splitting of the bill. Once this is done, no new person can be added to the bill anymore. Do you wish to continue? Reply 'yes' or 'no'."
 ERROR_INVALID_CONFIRMATION = "Sorry, I could not understand the message. Reply 'yes' to continue or 'no' to cancel."
@@ -35,6 +43,8 @@ class BillManagementHandler(ActionHandler):
     def execute(self, bot, update, trans, action_id,
                 subaction_id=0, data=None):
         action = None
+        if action_id == ACTION_SEND_BILL:
+            action = SendBill()
         if action_id == ACTION_GET_MANAGE_BILL:
             action = SendCompleteBill()
         if action_id == ACTION_REFRESH_BILL:
@@ -45,7 +55,40 @@ class BillManagementHandler(ActionHandler):
             action = DisplayConfirmPaymentsKB()
         if action_id == ACTION_CONFIRM_BILL_PAYMENT:
             action = ConfirmPayment()
+        if action_id == ACTION_SHARE_BILL_ITEM:
+            action = ShareBillItem()
+        if action_id == ACTION_SHARE_ALL_ITEMS:
+            action = ShareAllItems()
+        if action_id == ACTION_GET_MANAGE_BILL_KB:
+            action = DisplayManageBillKB()
+        if action_id == ACTION_GET_SHARE_ITEMS_KB:
+            action = DisplayShareItemsKB()
+
         action.execute(bot, update, trans, subaction_id, data)
+
+
+class SendBill(Action):
+    ACTION_SEND_BILL = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_SEND_BILL)
+
+    def execute(self, bot, update, trans, subaction_id=0, data=None):
+        bill_id = data.get(const.JSON_BILL_ID)
+        msg = update.message
+        __, __, __, is_closed = trans.get_bill_gen_info(bill_id)
+        if is_closed is None:
+            text, pm, kb = SendCompleteBill.get_appropriate_response(
+                bill_id, msg.from_user.id, trans
+            )
+            bot.sendMessage(
+                text=text,
+                chat_id=msg.chat_id,
+                parse_mode=pm,
+                reply_markup=kb
+            )
+        else:
+            return SendDebtsBill().execute(bot, update, trans, 0, data)
 
 
 class SendCompleteBill(Action):
@@ -55,26 +98,32 @@ class SendCompleteBill(Action):
         super().__init__(MODULE_ACTION_TYPE, ACTION_GET_MANAGE_BILL)
 
     def execute(self, bot, update, trans, subaction_id=0, data=None):
-        has_rights, chat_id, text = evaluate_rights(update, trans, data)
-        if not has_rights:
-            if chat_id is not None:
-                if update.callback_query is not None:
-                    update.callback_query.answer()
-                bot.sendMessage(
-                    chat_id=chat_id,
-                    text=text
-                )
-            return
         if subaction_id == self.ACTION_MANAGE_BILL:
             cbq = update.callback_query
             bill_id = data.get(const.JSON_BILL_ID)
-            return self.send_bill_response(bot, cbq, bill_id, trans)
+            __, owner_id, __, is_closed = trans.get_bill_gen_info(bill_id)
+            if is_closed is not None:
+                return
+
+            self.send_bill_response(bot, cbq, bill_id, trans)
+
+    @staticmethod
+    def get_appropriate_response(bill_id, user_id, trans):
+        text, pm = utils.get_complete_bill_text(bill_id, trans)
+        kb = None
+        __, owner_id, __, is_closed = trans.get_bill_gen_info(bill_id)
+        if user_id == owner_id:
+            kb = DisplayManageBillKB.get_manage_bill_keyboard(bill_id, trans)
+        else:
+            kb = DisplayShareItemsKB.get_share_items_keyboard(bill_id, trans)
+        return text, pm, kb
 
     def send_bill_response(self, bot, cbq, bill_id, trans):
         try:
             chat_id = cbq.message.chat_id
-            text, pm = utils.get_complete_bill_text(bill_id, trans)
-            kb = DisplayManageBillKB.get_manage_bill_keyboard(bill_id, trans)
+            text, pm, kb = self.get_appropriate_response(
+                bill_id, cbq.from_user.id, trans
+            )
             trans.reset_session(cbq.from_user.id, chat_id)
             cbq.answer()
             cbq.edit_message_text(
@@ -85,7 +134,7 @@ class SendCompleteBill(Action):
         except BadRequest as e:
             print(e)
         except Exception as e:
-            logging.exception('RefreshBill')
+            logging.exception('SendCompleteBill')
 
 
 class DisplayManageBillKB(Action):
@@ -127,6 +176,14 @@ class DisplayManageBillKB(Action):
                 {const.JSON_BILL_ID: bill_id}
             )
         )
+        share_items = InlineKeyboardButton(
+            text="Add yourself to Item(s)",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_SHARE_ITEMS_KB,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
         calc_bill_btn = InlineKeyboardButton(
             text="Calculate Split",
             callback_data=utils.get_action_callback_data(
@@ -138,7 +195,288 @@ class DisplayManageBillKB(Action):
         return InlineKeyboardMarkup(
             [[share_btn],
              [refresh_btn],
+             [share_items],
              [calc_bill_btn]]
+        )
+
+
+class DisplayShareItemsKB(Action):
+    ACTION_DISPLAY_SHARE_ITEMS_KB = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_GET_SHARE_ITEMS_KB)
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_DISPLAY_SHARE_ITEMS_KB:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            kb = self.get_appropriate_keyboard(
+                bill_id, cbq.from_user.id, trans
+            )
+            return cbq.edit_message_reply_markup(reply_markup=kb)
+
+    @staticmethod
+    def get_appropriate_keyboard(bill_id, user_id, trans):
+        __, owner_id, __, closed_at = trans.get_bill_gen_info(bill_id)
+        if owner_id == user_id:
+            return DisplayShareItemsKB.get_share_items_admin_keyboard(
+                bill_id, trans
+            )
+        else:
+            return DisplayShareItemsKB.get_share_items_keyboard(bill_id, trans)
+
+    @staticmethod
+    def get_share_items_keyboard(bill_id, trans):
+        keyboard = []
+        items = trans.get_bill_items(bill_id)
+        refresh_btn = InlineKeyboardButton(
+            text='Refresh',
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_REFRESH_BILL,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        keyboard.append([refresh_btn])
+        for item_id, item_name, __ in items:
+            item_btn = InlineKeyboardButton(
+                text=item_name,
+                callback_data=utils.get_action_callback_data(
+                    MODULE_ACTION_TYPE,
+                    ACTION_SHARE_BILL_ITEM,
+                    {const.JSON_BILL_ID: bill_id,
+                     const.JSON_ITEM_ID: item_id}
+                )
+            )
+            keyboard.append([item_btn])
+        share_all_btn = InlineKeyboardButton(
+            text='Share all items',
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_SHARE_ALL_ITEMS,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        keyboard.append([share_all_btn])
+
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def get_share_items_admin_keyboard(bill_id, trans):
+        keyboard = []
+        items = trans.get_bill_items(bill_id)
+        for item_id, item_name, __ in items:
+            item_btn = InlineKeyboardButton(
+                text=item_name,
+                callback_data=utils.get_action_callback_data(
+                    MODULE_ACTION_TYPE,
+                    ACTION_SHARE_BILL_ITEM,
+                    {const.JSON_BILL_ID: bill_id,
+                     const.JSON_ITEM_ID: item_id}
+                )
+            )
+            keyboard.append([item_btn])
+        share_all_btn = InlineKeyboardButton(
+            text='Share all items',
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_SHARE_ALL_ITEMS,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        keyboard.append([share_all_btn])
+        back_btn = InlineKeyboardButton(
+            text='Back',
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_MANAGE_BILL_KB,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        keyboard.append([back_btn])
+        return InlineKeyboardMarkup(keyboard)
+
+
+class DisplayPayItemsKB(Action):
+    ACTION_DISPLAY_PAY_ITEMS_KB = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_GET_PAY_ITEMS_KB)
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_DISPLAY_PAY_ITEMS_KB:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            kb = self.get_appropriate_keyboard(
+                bill_id, cbq.from_user.id, trans
+            )
+            return cbq.edit_message_reply_markup(reply_markup=kb)
+
+    @staticmethod
+    def get_appropriate_keyboard(bill_id, user_id, trans):
+        __, owner_id, __, closed_at = trans.get_bill_gen_info(bill_id)
+        if owner_id == user_id:
+            return DisplayPayItemsKB.get_pay_items_admin_keyboard(
+                bill_id, trans
+            )
+        else:
+            return DisplayPayItemsKB.get_pay_items_keyboard(bill_id, trans)
+
+    @staticmethod
+    def get_pay_items_keyboard(self, bill_id, trans):
+        keyboard = []
+        keyboard.extend(DisplayPayItemsKB.get_payment_buttons(bill_id, trans))
+        refresh_btn = InlineKeyboardButton(
+            text='Refresh',
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_REFRESH_BILL,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        keyboard.append([refresh_btn])
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def get_pay_items_admin_keyboard(bill_id, trans):
+        keyboard = []
+        keyboard.extend(DisplayPayItemsKB.get_payment_buttons(bill_id, trans))
+        back_btn = InlineKeyboardButton(
+            text='Back',
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_MANAGE_BILL_KB,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        keyboard.append([back_btn])
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def get_payment_buttons(bill_id, trans, debts=None):
+        kb = []
+        if debts is None:
+            debts, __ = utils.calculate_remaining_debt(
+                bill_id, trans
+            )
+        for debt in debts:
+            credtr = debt['creditor']
+            pay_btn = InlineKeyboardButton(
+                text='Pay ' + utils.format_name(
+                    credtr[3], credtr[1], credtr[2]
+                ),
+                callback_data=utils.get_action_callback_data(
+                    MODULE_ACTION_TYPE,
+                    ACTION_PAY_DEBT,
+                    {const.JSON_BILL_ID: bill_id,
+                     const.JSON_CREDITOR_ID: credtr[0]}
+                )
+            )
+            kb.append([pay_btn])
+
+        return kb
+
+
+class ShareBillItem(Action):
+    ACTION_SHARE_ITEM = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_SHARE_BILL_ITEM)
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_SHARE_ITEM:
+            print("3. Parsing: " + str(datetime.datetime.now().time()))
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            item_id = data.get(const.JSON_ITEM_ID)
+
+            __, __, __, is_closed = trans.get_bill_gen_info(bill_id)
+            if is_closed is not None:
+                debts, unique_users = utils.calculate_remaining_debt(
+                    bill_id, trans
+                )
+                text, pm = utils.format_debts_bill_text(
+                    bill_id, debts, unique_users, trans
+                )
+                btns = DisplayPayItemsKB.get_payment_buttons(
+                    bill_id, trans, debts=debts
+                )
+                kb = InlineKeyboardMarkup(btns)
+                cbq.answer()
+                return cbq.edit_message_text(
+                    text=text,
+                    parse_mode=pm,
+                    reply_markup=kb
+                )
+
+            self.share_bill_item(bot, cbq, bill_id, item_id, trans)
+            print("7. Sent: " + str(datetime.datetime.now().time()))
+            counter.Counter.remove_count()
+
+    def share_bill_item(self, bot, cbq, bill_id, item_id, trans):
+        print("4. Toggle share: " + str(datetime.datetime.now().time()))
+        trans.toggle_bill_share(bill_id, item_id, cbq.from_user.id)
+        print("5. Toggled: " + str(datetime.datetime.now().time()))
+        text, pm = utils.get_complete_bill_text(bill_id, trans)
+        kb = DisplayShareItemsKB.get_appropriate_keyboard(
+            bill_id, cbq.from_user.id, trans
+        )
+        print("6. Prepared: " + str(datetime.datetime.now().time()))
+        cbq.edit_message_text(
+            text=text,
+            parse_mode=pm,
+            reply_markup=kb
+        )
+
+
+class ShareAllItems(Action):
+    ACTION_SHARE_ALL = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_SHARE_ALL_ITEMS)
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_SHARE_ALL:
+            print("3. Parsing: " + str(datetime.datetime.now().time()))
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+
+            __, __, __, is_closed = trans.get_bill_gen_info(bill_id)
+            if is_closed is not None:
+                debts, unique_users = utils.calculate_remaining_debt(
+                    bill_id, trans
+                )
+                text, pm = utils.format_debts_bill_text(
+                    bill_id, debts, unique_users, trans
+                )
+                btns = DisplayPayItemsKB.get_payment_buttons(
+                    bill_id, trans, debts=debts
+                )
+                kb = InlineKeyboardMarkup(btns)
+                cbq.answer()
+                return cbq.edit_message_text(
+                    text=text,
+                    parse_mode=pm,
+                    reply_markup=kb
+                )
+
+            self.share_all_items(bot, cbq, bill_id, trans)
+            print("7. Sent: " + str(datetime.datetime.now().time()))
+            counter.Counter.remove_count()
+
+    def share_all_items(self, bot, cbq, bill_id, trans):
+        print("4. Toggle share: " + str(datetime.datetime.now().time()))
+        trans.toggle_all_bill_shares(bill_id, cbq.from_user.id)
+        print("5. Toggled: " + str(datetime.datetime.now().time()))
+        text, pm = utils.get_complete_bill_text(bill_id, trans)
+        kb = DisplayShareItemsKB.get_appropriate_keyboard(
+            bill_id, cbq.from_user.id, trans
+        )
+        print("6. Prepared: " + str(datetime.datetime.now().time()))
+        cbq.edit_message_text(
+            text=text,
+            parse_mode=pm,
+            reply_markup=kb
         )
 
 
@@ -297,6 +635,54 @@ class CalculateBillSplit(Action):
             logging.exception('split_bill')
 
 
+class DisplayInspectBillKB(Action):
+    ACTION_DISPLAY_INSPECT_BILL_KB = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_GET_INSPECT_BILL_KB)
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_DISPLAY_INSPECT_BILL_KB:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            return cbq.edit_message_reply_markup(
+                reply_markup=self.get_inspect_bill_keyboard(bill_id)
+            )
+
+    def get_inspect_bill_keyboard(bill_id):
+        kb = []
+        by_user_btn = InlineKeyboardButton(
+            text="Inspect Bill by Person",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_REFRESH_BILL,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        by_item_btn = InlineKeyboardButton(
+            text="Inspect Bill by Item",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_REFRESH_BILL,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        back_btn = InlineKeyboardButton(
+            text="Inspect Bill by Item",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_REFRESH_BILL,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        kb = [
+            [by_user_btn],
+            [by_item_btn],
+            [back_btn]
+        ]
+        return InlineKeyboardMarkup(kb)
+
+
 class DisplayConfirmPaymentsKB(Action):
     ACTION_DISPLAY_PAYMENTS_KB = 0
 
@@ -374,36 +760,7 @@ class SendDebtsBill(Action):
         text, pm = utils.format_debts_bill_text(
             bill_id, debts, unique_users, trans
         )
-        kb = get_payment_keyboard(bill_id, debts)
-        summary_btn = InlineKeyboardButton(
-            text="Bill Summary",
-            callback_data=utils.get_action_callback_data(
-                MODULE_ACTION_TYPE,
-                ACTION_REFRESH_BILL,
-                {const.JSON_BILL_ID: bill_id}
-            )
-        )
-        by_user_btn = InlineKeyboardButton(
-            text="Inspect Bill by Person",
-            callback_data=utils.get_action_callback_data(
-                MODULE_ACTION_TYPE,
-                ACTION_REFRESH_BILL,
-                {const.JSON_BILL_ID: bill_id}
-            )
-        )
-        by_item_btn = InlineKeyboardButton(
-            text="Inspect Bill by Item",
-            callback_data=utils.get_action_callback_data(
-                MODULE_ACTION_TYPE,
-                ACTION_GET_CONFIRM_PAYMENTS_KB,
-                {const.JSON_BILL_ID: bill_id}
-            )
-        )
-        kb.inline_keyboard.extend([
-            [summary_btn],
-            [by_user_btn],
-            [by_item_btn]
-        ])
+        kb = DisplayPayItemsKB.get_payment_buttons(bill_id, trans, debts=debts)
         trans.reset_session(msg.chat_id, msg.from_user.id)
         bot.sendMessage(
             chat_id=msg.chat_id,

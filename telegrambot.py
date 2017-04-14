@@ -55,8 +55,18 @@ class TelegramBot:
     def start(self, bot, update, args):
         # TODO: make command list screen
         if args is not None and len(args) == 1:
-            # send the thing
-            pass
+            handler = manage_bill_handler.BillManagementHandler()
+            conn = self.db.get_connection()
+            data = {const.JSON_BILL_ID: args[0]}
+            with Transaction(conn) as trans:
+                handler.execute(
+                    bot,
+                    update,
+                    trans,
+                    action_id=manage_bill_handler.ACTION_SEND_BILL,
+                    data=data
+                )
+            return
         bot.sendMessage(chat_id=update.message.chat_id, text="Start screen")
 
     @run_async

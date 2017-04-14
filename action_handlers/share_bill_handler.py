@@ -4,16 +4,11 @@ from telegram.inlinekeyboardmarkup import InlineKeyboardMarkup
 from telegram.inlinekeyboardbutton import InlineKeyboardButton
 import constants as const
 import utils
-import datetime
-import counter
 
 MODULE_ACTION_TYPE = const.TYPE_SHARE_BILL
 
 ACTION_FIND_BILLS = 0
-ACTION_SHARE_BILL_ITEM = 1
-ACTION_SHARE_ALL_ITEMS = 2
-ACTION_PAY_DEBT = 3
-ACTION_INSPECT_BILL = 4
+ACTION_REFRESH_SHARE_BILL = 1
 
 
 class BillShareHandler(ActionHandler):
@@ -25,12 +20,8 @@ class BillShareHandler(ActionHandler):
         action = None
         if action_id == ACTION_FIND_BILLS:
             action = FindBills()
-        if action_id == ACTION_SHARE_BILL_ITEM:
-            action = ShareBillItem()
-        if action_id == ACTION_SHARE_ALL_ITEMS:
-            action = ShareAllItems()
-        if action_id == ACTION_PAY_DEBT:
-            action = PayDebt()
+        if action_id == ACTION_REFRESH_SHARE_BILL:
+            action = RefreshShareBill()
         action.execute(bot, update, trans, subaction_id, data)
 
 
@@ -63,12 +54,13 @@ class FindBills(Action):
 
         iq.answer(results)
 
-    def get_sharing_bill_result(self, bill_id, trans):
+    @staticmethod
+    def get_sharing_bill_result(bill_id, trans):
         details = trans.get_bill_details(bill_id)
         msg = utils.format_complete_bill_text(details, bill_id, trans)
         if msg is None:
             return
-        kb = get_share_keyboard(bill_id, ACTION_SHARE_BILL_ITEM, trans)
+        kb = get_redirect_share_keyboard(bill_id)
         return InlineQueryResultArticle(
             id=bill_id,
             title=details.get('title'),
@@ -83,13 +75,14 @@ class FindBills(Action):
             )
         )
 
-    def get_debt_bill_result(self, bill_id, trans):
+    @staticmethod
+    def get_debt_bill_result(bill_id, trans):
         details = trans.get_bill_details(bill_id)
         debts, unique_users = utils.calculate_remaining_debt(bill_id, trans)
         text, pm = utils.format_debts_bill_text(
             bill_id, debts, unique_users, trans
         )
-        kb = get_payment_keyboard(bill_id, debts)
+        kb = get_redirect_pay_keyboard(bill_id)
         return InlineQueryResultArticle(
             id=bill_id,
             title=details.get('title'),
@@ -105,90 +98,41 @@ class FindBills(Action):
         )
 
 
-class ShareBillItem(Action):
-    ACTION_SHARE_ITEM = 0
+class RefreshShareBill(Action):
+    ACTION_REFRESH_SHARE_BILL = 0
 
     def __init__(self):
-        super().__init__(MODULE_ACTION_TYPE, ACTION_SHARE_BILL_ITEM)
+        super().__init__(MODULE_ACTION_TYPE, ACTION_REFRESH_SHARE_BILL)
 
     def execute(self, bot, update, trans, subaction_id, data=None):
-        if subaction_id == self.ACTION_SHARE_ITEM:
-            print("3. Parsing: " + str(datetime.datetime.now().time()))
-            cbq = update.callback_query
-            bill_id = data.get(const.JSON_BILL_ID)
-            item_id = data.get(const.JSON_ITEM_ID)
+        cbq = update.callback_query
+        bill_id = data.get(const.JSON_BILL_ID)
+        if subaction_id == self.ACTION_REFRESH_SHARE_BILL:
+            __, __, __, is_closed = trans.get_bill_gen_info(bill_id)
 
-            if not has_rights(trans, data):
-                debts, unique_users = utils.calculate_remaining_debt(
-                    bill_id, trans
-                )
-                text, pm = utils.format_debts_bill_text(
-                    bill_id, debts, unique_users, trans
-                )
-                kb = get_payment_keyboard(bill_id, debts)
-                cbq.answer()
-                return cbq.edit_message_text(
-                    text=text,
-                    parse_mode=pm,
-                    reply_markup=kb
-                )
+            if is_closed is None:
+                self.refresh_share_bill(bill_id, cbq, trans)
+            else:
+                self.refresh_debt_bill(bill_id, cbq, trans)
 
-            self.share_bill_item(bot, cbq, bill_id, item_id, trans)
-            print("7. Sent: " + str(datetime.datetime.now().time()))
-            counter.Counter.remove_count()
-
-    def share_bill_item(self, bot, cbq, bill_id, item_id, trans):
-        print("4. Toggle share: " + str(datetime.datetime.now().time()))
-        trans.toggle_bill_share(bill_id, item_id, cbq.from_user.id)
-        print("5. Toggled: " + str(datetime.datetime.now().time()))
-        text, pm = utils.get_complete_bill_text(bill_id, trans)
-        kb = get_share_keyboard(bill_id, ACTION_SHARE_BILL_ITEM, trans)
-        print("6. Prepared: " + str(datetime.datetime.now().time()))
+    def refresh_share_bill(self, bill_id, cbq, trans):
+        details = trans.get_bill_details(bill_id)
+        text, pm = utils.format_complete_bill_text(details, bill_id, trans)
+        kb = get_redirect_share_keyboard(bill_id)
+        cbq.answer()
         cbq.edit_message_text(
             text=text,
             parse_mode=pm,
             reply_markup=kb
         )
 
-
-class ShareAllItems(Action):
-    ACTION_SHARE_ALL = 0
-
-    def __init__(self):
-        super().__init__(MODULE_ACTION_TYPE, ACTION_SHARE_BILL_ITEM)
-
-    def execute(self, bot, update, trans, subaction_id, data=None):
-        if subaction_id == self.ACTION_SHARE_ALL:
-            print("3. Parsing: " + str(datetime.datetime.now().time()))
-            cbq = update.callback_query
-            bill_id = data.get(const.JSON_BILL_ID)
-
-            if not has_rights(trans, data):
-                debts, unique_users = utils.calculate_remaining_debt(
-                    bill_id, trans
-                )
-                text, pm = utils.format_debts_bill_text(
-                    bill_id, debts, unique_users, trans
-                )
-                kb = get_payment_keyboard(bill_id, debts)
-                cbq.answer()
-                return cbq.edit_message_text(
-                    text=text,
-                    parse_mode=pm,
-                    reply_markup=kb
-                )
-
-            self.share_all_items(bot, cbq, bill_id, trans)
-            print("7. Sent: " + str(datetime.datetime.now().time()))
-            counter.Counter.remove_count()
-
-    def share_all_items(self, bot, cbq, bill_id, trans):
-        print("4. Toggle share: " + str(datetime.datetime.now().time()))
-        trans.toggle_all_bill_shares(bill_id, cbq.from_user.id)
-        print("5. Toggled: " + str(datetime.datetime.now().time()))
-        text, pm = utils.get_complete_bill_text(bill_id, trans)
-        kb = get_share_keyboard(bill_id, ACTION_SHARE_BILL_ITEM, trans)
-        print("6. Prepared: " + str(datetime.datetime.now().time()))
+    def refresh_debt_bill(self, bill_id, cbq, trans):
+        debts, unique_users = utils.calculate_remaining_debt(bill_id, trans)
+        text, pm = utils.format_debts_bill_text(
+            bill_id, debts, unique_users, trans
+        )
+        kb = get_redirect_pay_keyboard(bill_id)
+        cbq.answer()
         cbq.edit_message_text(
             text=text,
             parse_mode=pm,
@@ -231,63 +175,47 @@ class PayDebt(Action):
         )
 
 
-def get_share_keyboard(bill_id, action, trans):
-    keyboard = []
-    items = trans.get_bill_items(bill_id)
-    for item_id, item_name, __ in items:
-        item_btn = InlineKeyboardButton(
-            text=item_name,
-            callback_data=utils.get_action_callback_data(
-                MODULE_ACTION_TYPE,
-                action,
-                {const.JSON_BILL_ID: bill_id,
-                 const.JSON_ITEM_ID: item_id}
-            )
-        )
-        keyboard.append([item_btn])
-    share_all_btn = InlineKeyboardButton(
-        text='Share all items',
+def get_redirect_share_keyboard(bill_id):
+    refresh_btn = InlineKeyboardButton(
+        text='Refresh',
         callback_data=utils.get_action_callback_data(
             MODULE_ACTION_TYPE,
-            ACTION_SHARE_ALL_ITEMS,
+            ACTION_REFRESH_SHARE_BILL,
             {const.JSON_BILL_ID: bill_id}
         )
     )
-    keyboard.append([share_all_btn])
-
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_payment_keyboard(bill_id, debts):
-    kb = []
-    for debt in debts:
-        credtr = debt['creditor']
-        pay_btn = InlineKeyboardButton(
-            text='Pay ' + utils.format_name(credtr[3], credtr[1], credtr[2]),
-            callback_data=utils.get_action_callback_data(
-                MODULE_ACTION_TYPE,
-                ACTION_PAY_DEBT,
-                {const.JSON_BILL_ID: bill_id,
-                 const.JSON_CREDITOR_ID: credtr[0]}
-            )
-        )
-        kb.append([pay_btn])
     inspect_btn = InlineKeyboardButton(
-        text='Inspect bill',
+        text='Share items',
         url='https://telegram.me/WhoPayBot?start=' + bill_id
     )
-    kb.append([inspect_btn])
 
-    return InlineKeyboardMarkup(kb)
+    return InlineKeyboardMarkup([
+        [refresh_btn],
+        [inspect_btn]
+    ])
 
 
-def has_rights(trans, data):
-    if data is None:
-        return True
-    bill_id = data.get(const.JSON_BILL_ID)
-    if bill_id is None:
-        return True
+def get_redirect_pay_keyboard(bill_id):
+    refresh_btn = InlineKeyboardButton(
+        text='Refresh',
+        callback_data=utils.get_action_callback_data(
+            MODULE_ACTION_TYPE,
+            ACTION_REFRESH_SHARE_BILL,
+            {const.JSON_BILL_ID: bill_id}
+        )
+    )
+    inspect_btn = InlineKeyboardButton(
+        text='Pay Debts',
+        url='https://telegram.me/WhoPayBot?start=' + bill_id
+    )
 
+    return InlineKeyboardMarkup([
+        [refresh_btn],
+        [inspect_btn]
+    ])
+
+
+def is_closed(bill_id, trans):
     __, __, __, is_closed = trans.get_bill_gen_info(bill_id)
 
     if is_closed is not None:
