@@ -16,7 +16,7 @@ PRIVATE_CHAT = 'private'
 class TelegramBot:
     def __init__(self, token, app_name, port, db, is_prod):
         self.db = db
-        self.updater = Updater(token=token)
+        self.updater = Updater(token=token, workers=32)
         self.init_handlers(self.updater.dispatcher)
 
         if is_prod:
