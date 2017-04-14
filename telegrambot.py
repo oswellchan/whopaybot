@@ -6,8 +6,9 @@ from action_handlers import create_bill_handler, manage_bill_handler, share_bill
 import json
 import constants as const
 import logging
+import counter
 import datetime
-from threading import Thread
+
 
 PRIVATE_CHAT = 'private'
 
@@ -130,6 +131,7 @@ class TelegramBot:
     @run_async
     def handle_all_callback(self, bot, update):
         print("1. Received: " + str(datetime.datetime.now().time()))
+        counter.Counter.add_count()
         try:
             cbq = update.callback_query
             data = cbq.data
@@ -154,12 +156,10 @@ class TelegramBot:
                     return cbq.answer('nothing')
                 print("1.1. Find handler: " + str(datetime.datetime.now().time()))
                 handler = self.get_action_handler(action_type)
-                t = Thread(
-                    target=handler.execute,
-                    args=(bot, update, trans, action_id, 0, payload)
-                )
                 print("2. Dispatched: " + str(datetime.datetime.now().time()))
-                t.start()
+                return handler.execute(
+                    bot, update, trans, action_id, 0, payload
+                )
         except Exception as e:
             logging.exception('handle_all_callback')
 

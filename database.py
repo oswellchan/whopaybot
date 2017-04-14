@@ -102,6 +102,8 @@ class Transaction:
                 FOR UPDATE;
             """, (chat_id, user_id)
             )
+            if self.cursor.description is None:
+                raise Exception('no results')
 
             rows = self.cursor.fetchall()
 
@@ -141,9 +143,13 @@ class Transaction:
                 self.cursor.execute("""\
                     INSERT INTO bills (id, title, owner_id)
                         VALUES (%s, %s, %s)
-                    ON CONFLICT(id) DO NOTHING;
+                    ON CONFLICT(id) DO NOTHING
+                    RETURNING id;
                 """, (bill_id, title, owner_id)
                 )
+                if self.cursor.description is None:
+                    raise Exception('nothing fetched')
+
                 rows = self.cursor.fetchall()
                 if len(rows) > 0:
                     return bill_id
@@ -252,9 +258,10 @@ class Transaction:
                 WHERE b.id = %s
                 """, (bill_id,)
             )
-            print(bill_id)
+            if self.cursor.description is None:
+                raise Exception('No bill found')
+
             rows = self.cursor.fetchall()
-            print(rows)
             if len(rows) != 1:
                 raise Exception('More or less than 1 bill found')
 

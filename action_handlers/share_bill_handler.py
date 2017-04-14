@@ -5,6 +5,7 @@ from telegram.inlinekeyboardbutton import InlineKeyboardButton
 import constants as const
 import utils
 import datetime
+import counter
 
 MODULE_ACTION_TYPE = const.TYPE_SHARE_BILL
 
@@ -134,6 +135,7 @@ class ShareBillItem(Action):
 
             self.share_bill_item(bot, cbq, bill_id, item_id, trans)
             print("7. Sent: " + str(datetime.datetime.now().time()))
+            counter.Counter.remove_count()
 
     def share_bill_item(self, bot, cbq, bill_id, item_id, trans):
         print("4. Toggle share: " + str(datetime.datetime.now().time()))
@@ -178,6 +180,7 @@ class ShareAllItems(Action):
 
             self.share_all_items(bot, cbq, bill_id, trans)
             print("7. Sent: " + str(datetime.datetime.now().time()))
+            counter.Counter.remove_count()
 
     def share_all_items(self, bot, cbq, bill_id, trans):
         print("4. Toggle share: " + str(datetime.datetime.now().time()))
