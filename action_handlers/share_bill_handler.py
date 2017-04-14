@@ -140,41 +140,6 @@ class RefreshShareBill(Action):
         )
 
 
-class PayDebt(Action):
-    ACTION_PAY_DEBT = 0
-
-    def __init__(self):
-        super().__init__(MODULE_ACTION_TYPE, ACTION_PAY_DEBT)
-
-    def execute(self, bot, update, trans, subaction_id, data=None):
-        if subaction_id == self.ACTION_PAY_DEBT:
-            cbq = update.callback_query
-            bill_id = data.get(const.JSON_BILL_ID)
-            creditor_id = data.get(const.JSON_CREDITOR_ID)
-            return self.pay_debt(bot, cbq, bill_id, creditor_id, trans)
-
-    def pay_debt(self, bot, cbq, bill_id, creditor_id, trans):
-        trans.add_payment_by_bill(
-            const.PAY_TYPE_NORMAL,
-            bill_id,
-            creditor_id,
-            cbq.from_user.id
-        )
-        debts, unique_users = utils.calculate_remaining_debt(
-            bill_id, trans
-        )
-        text, pm = utils.format_debts_bill_text(
-            bill_id, debts, unique_users, trans
-        )
-        kb = get_payment_keyboard(bill_id, debts)
-        cbq.answer()
-        cbq.edit_message_text(
-            text=text,
-            parse_mode=pm,
-            reply_markup=kb
-        )
-
-
 def get_redirect_share_keyboard(bill_id):
     refresh_btn = InlineKeyboardButton(
         text='Refresh',

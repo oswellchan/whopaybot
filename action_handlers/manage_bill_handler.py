@@ -63,6 +63,8 @@ class BillManagementHandler(ActionHandler):
             action = DisplayManageBillKB()
         if action_id == ACTION_GET_SHARE_ITEMS_KB:
             action = DisplayShareItemsKB()
+        if action_id == ACTION_PAY_DEBT:
+            action = PayDebt()
 
         action.execute(bot, update, trans, subaction_id, data)
 
@@ -499,10 +501,13 @@ class RefreshBill(Action):
 
     def refresh_debts_bill(self, update, trans, data):
         try:
+            cbq = update.callback_query
             bill_id = data.get(const.JSON_BILL_ID)
-            txt, pm, kb = SendDebtsBill.get_debts_bill_msg(bill_id, trans)
-            update.callback_query.answer()
-            update.callback_query.edit_message_text(
+            txt, pm, kb = SendDebtsBill.get_debts_bill_msg(
+                bill_id, cbq.from_user.id, trans
+            )
+            cbq.answer()
+            cbq.edit_message_text(
                 text=txt,
                 parse_mode=pm,
                 reply_markup=kb
@@ -756,11 +761,7 @@ class SendDebtsBill(Action):
             return self.send_debts_bill(bot, bill_id, msg, trans)
 
     def send_debts_bill(self, bot, bill_id, msg, trans):
-        debts, unique_users = utils.calculate_remaining_debt(bill_id, trans)
-        text, pm = utils.format_debts_bill_text(
-            bill_id, debts, unique_users, trans
-        )
-        kb = DisplayPayItemsKB.get_payment_buttons(bill_id, trans, debts=debts)
+        text, pm, kb = self.get_debts_bill_msg(bill_id, msg.from_user.id, trans)
         trans.reset_session(msg.chat_id, msg.from_user.id)
         bot.sendMessage(
             chat_id=msg.chat_id,
@@ -770,35 +771,16 @@ class SendDebtsBill(Action):
         )
 
     @staticmethod
-    def get_debts_bill_msg(bill_id, trans):
-        bill_name, __, __, __ = trans.get_bill_gen_info(bill_id)
-        share_btn = InlineKeyboardButton(
-            text="Share Bill",
-            switch_inline_query=bill_name
+    def get_debts_bill_msg(bill_id, user_id, trans):
+        __, owner_id, __, __ = trans.get_bill_gen_info(bill_id)
+        if user_id == owner_id:
+            return SendDebtsBillAdmin.get_debts_bill_msg(bill_id, trans)
+        debts, unique_users = utils.calculate_remaining_debt(bill_id, trans)
+        text, pm = utils.format_debts_bill_text(
+            bill_id, debts, unique_users, trans
         )
-        refresh_btn = InlineKeyboardButton(
-            text="Refresh Bill",
-            callback_data=utils.get_action_callback_data(
-                MODULE_ACTION_TYPE,
-                ACTION_REFRESH_BILL,
-                {const.JSON_BILL_ID: bill_id}
-            )
-        )
-        confirm_btn = InlineKeyboardButton(
-            text="Confirm Payments",
-            callback_data=utils.get_action_callback_data(
-                MODULE_ACTION_TYPE,
-                ACTION_GET_CONFIRM_PAYMENTS_KB,
-                {const.JSON_BILL_ID: bill_id}
-            )
-        )
-        kb = InlineKeyboardMarkup(
-            [[share_btn],
-             [refresh_btn],
-             [confirm_btn]]
-        )
-        text, pm = utils.get_debts_bill_text(bill_id, trans)
-        return text, pm, kb
+        kb = DisplayPayItemsKB.get_payment_buttons(bill_id, trans, debts=debts)
+        return text, pm, InlineKeyboardMarkup(kb)
 
 
 class SendDebtsBillAdmin(Action):
@@ -853,6 +835,29 @@ class SendDebtsBillAdmin(Action):
         )
         text, pm = utils.get_debts_bill_text(bill_id, trans)
         return text, pm, kb
+
+
+class PayDebt(Action):
+    ACTION_PAY_DEBT = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_PAY_DEBT)
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_PAY_DEBT:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            creditor_id = data.get(const.JSON_CREDITOR_ID)
+            self.pay_debt(bot, cbq, bill_id, creditor_id, trans)
+            RefreshBill().execute(bot, update, trans, 0, data)
+
+    def pay_debt(self, bot, cbq, bill_id, creditor_id, trans):
+        trans.add_payment_by_bill(
+            const.PAY_TYPE_NORMAL,
+            bill_id,
+            creditor_id,
+            cbq.from_user.id
+        )
 
 
 class ConfirmPayment(Action):
