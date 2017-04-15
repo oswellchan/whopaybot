@@ -567,6 +567,26 @@ class Transaction:
             self.is_error = True
             raise e
 
+    def has_bill_share(self, bill_id, item_id, user_id):
+        try:
+            self.cursor.execute("""\
+                SELECT id from bill_shares
+                    WHERE bill_id =  %s
+                        AND item_id = %s
+                        AND user_id = %s
+                        AND is_deleted = FALSE;
+            """, (bill_id, item_id, user_id)
+            )
+
+            rows = self.cursor.fetchall()
+            if len(rows) < 1:
+                return False
+            else:
+                return True
+        except Exception as e:
+            self.is_error = True
+            raise e
+
     def add_debtors(self, bill_id, creditor_id, debtors):
         try:
             if len(debtors) < 1:
