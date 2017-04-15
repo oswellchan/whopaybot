@@ -639,7 +639,7 @@ class AddItems(Action):
             msg.from_user.id,
             bill_id,
             trans,
-            keyboard=DisplayModifyItemsKB.get_modify_items_keyboard(
+            keyboard=DisplayNewBillKB.get_new_bill_keyboard(
                 bill_id
             )
         )
@@ -973,7 +973,7 @@ class AddTax(Action):
             msg.from_user.id,
             bill_id,
             trans,
-            keyboard=DisplayModifyTaxesKB.get_modify_taxes_keyboard(
+            keyboard=DisplayNewBillKB.get_new_bill_keyboard(
                 bill_id
             )
         )
