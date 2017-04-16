@@ -628,13 +628,17 @@ class CalculateBillSplit(Action):
 
             trans.add_debtors(bill_id, bill['owner_id'], debtors)
             trans.close_bill(bill_id)
-            trans.add_payment_by_bill(
-                const.PAY_TYPE_NORMAL,
-                bill_id,
-                bill['owner_id'],
-                bill['owner_id'],
-                auto_confirm=True
-            )
+            for debtor_id, amt in debtors.items():
+                auto_confirm = debtor_id == bill['owner_id']
+                is_deleted = debtor_id != bill['owner_id']
+                trans.add_payment_by_bill(
+                    const.PAY_TYPE_NORMAL,
+                    bill_id,
+                    bill['owner_id'],
+                    debtor_id,
+                    auto_confirm=auto_confirm,
+                    is_deleted=True
+                )
             return SendDebtsBillAdmin().execute(bot, update, trans, data=data)
         except Exception as e:
             logging.exception('split_bill')

@@ -592,80 +592,147 @@ class Transaction:
             self.is_error = True
             raise e
 
-    def add_payment(self, type, bill_id, creditor_id, debtor_id,
-                    amt, debt_id=None, comments=None):
+    def add_payment(self, d_type, debt_id, amt, comments=None,
+                    auto_confirm=False, is_deleted=False):
         try:
-            pass
+            query = """\
+                INSERT INTO payments (type, debt_id, amount,
+                    is_deleted, confirmed_at)
+                VALUES
+            """
+            if auto_confirm:
+                query += " (%s, %s, %s, %s, NOW())"
+            else:
+                query += " (%s, %s, %s, %s, NULL)"
+
+            self.cursor.execute(query, (d_type, debt_id, amt, is_deleted))
         except Exception as e:
             self.is_error = True
             raise e
 
     def add_payment_by_bill(self, d_type, bill_id, creditor_id, debtor_id,
-                            auto_confirm=False, amt=None):
+                            auto_confirm=False, is_deleted=False):
         try:
-            self.cursor.execute("""\
-                SELECT d.id, d.original_amt, p.amount
-                FROM debts d
-                LEFT JOIN payments p ON p.debt_id = d.id
-                WHERE d.bill_id = %s
-                AND d.debtor_id = %s
-                AND d.creditor_id = %s
-                AND d.is_deleted = FALSE
-                AND NOT COALESCE(p.is_deleted, FALSE)
-                AND (
-                    (p.created_at IS NOT NULL AND p.confirmed_at IS NOT NULL)
-                    OR (p.created_at IS NULL AND p.confirmed_at IS NULL)
-                )
-                ORDER BY d.id
-                FOR UPDATE OF d
-            """, (bill_id, debtor_id, creditor_id)
+            """
+            row lock on debts table acquired.
+            ensures state in the remaining code is consistent as
+            lock is not released until request is finished
+            """
+            remaining_debts = self.get_remaining_debt_by_bill(
+                bill_id, debtor_id, creditor_id
             )
-
-            results = self.cursor.fetchall()
-            final_amts = []
-            prev_d_id = None
-            final_amt = 0
-            for i, result in enumerate(results):
-                d_id, d_amt, p_amt = result
-                if prev_d_id is None:
-                    prev_d_id = d_id
-                    final_amt = d_amt
-
-                if prev_d_id != d_id:
-                    if not math.isclose(final_amt, 0):
-                        final_amts.append((prev_d_id, final_amt))
-                    prev_d_id = d_id
-                    final_amt = amt
-
-                if p_amt is not None:
-                    final_amt -= p_amt
-
-                if i >= len(results) - 1:
-                    if not math.isclose(final_amt, 0):
-                        final_amts.append((prev_d_id, final_amt))
-
-            if len(final_amts) < 1:
+            if len(remaining_debts) < 1:
                 return
 
-            query = """\
-                INSERT INTO payments (type, debt_id, amount,
-                    confirmed_at)
-                VALUES
-            """
-            sql_vars = []
-            values = []
-            for debt_id, amt in final_amts:
-                if auto_confirm:
-                    sql_vars.append(" (%s, %s, %s, NOW())")
-                else:
-                    sql_vars.append(" (%s, %s, %s, NULL)")
-                values.extend([d_type, debt_id, amt])
-            query += ','.join(sql_vars)
-            query += " RETURNING id"
-            self.cursor.execute(query, tuple(values))
+            pending = self.get_pending_payments(bill_id, creditor_id)
+            if len(pending) > 0:
+                for pid, __, __, __, __ in pending:
+                    self.cursor.execute("""\
+                        UPDATE payments SET is_deleted = TRUE
+                        WHERE id = %s
+                    """, (pid,))
+                return
+
+            # get deleted payments
+            self.cursor.execute("""\
+                SELECT p.id, d.id
+                FROM payments p
+                INNER JOIN debts d ON d.id = p.debt_id
+                INNER JOIN users u ON u.id = d.debtor_id
+                WHERE d.bill_id = %s
+                AND d.creditor_id = %s
+                AND d.is_deleted = FALSE
+                AND p.is_deleted = TRUE
+                AND p.confirmed_at IS NULL
+                FOR UPDATE;
+            """, (bill_id, creditor_id)
+            )
+
+            # each user can only have 1 pending payment
+            # for each debt in a bill
+            deleted = self.cursor.fetchall()
+
+            unadded = [d[0] for d in remaining_debts]
+            for debt_id, amt in remaining_debts:
+                for pay_id, pay_debt_id in deleted:
+                    if pay_debt_id == debt_id:
+                        query = """\
+                            UPDATE payments SET
+                                type=%s,
+                                debt_id=%s,
+                                amount=%s,
+                                is_deleted=%s
+                        """
+                        if auto_confirm:
+                            query += ", confirmed_at=NOW())"
+
+                        query += " WHERE id = %s"   
+                        self.cursor.execute(
+                            query,
+                            (d_type, debt_id, amt, is_deleted, pay_id)
+                        )
+                        unadded.remove(debt_id)
+
+            for debt_id, amt in remaining_debts:
+                if debt_id in unadded:
+                    query = """\
+                        INSERT INTO payments (type, debt_id, amount,
+                            is_deleted, confirmed_at)
+                        VALUES
+                    """
+                    if auto_confirm:
+                        query += " (%s, %s, %s, %s, NOW())"
+                    else:
+                        query += " (%s, %s, %s, %s, NULL)"
+
+                    self.cursor.execute(
+                        query,
+                        (d_type, debt_id, amt, is_deleted)
+                    )
+
         except Exception as e:
             self.is_error = True
             raise e
+
+    def get_remaining_debt_by_bill(self, bill_id, debtor_id, creditor_id):
+        self.cursor.execute("""\
+            SELECT d.id, d.original_amt, p.amount, p.confirmed_at,
+            COALESCE(p.is_deleted, FALSE)
+            FROM debts d
+            LEFT JOIN payments p ON p.debt_id = d.id
+            WHERE d.bill_id = %s
+            AND d.debtor_id = %s
+            AND d.creditor_id = %s
+            AND d.is_deleted = FALSE
+            ORDER BY d.id
+            FOR UPDATE OF d
+        """, (bill_id, debtor_id, creditor_id)
+        )
+
+        results = self.cursor.fetchall()
+        final_amts = []
+        prev_d_id = None
+        final_amt = 0
+        for i, result in enumerate(results):
+            d_id, d_amt, p_amt, confirmed_at, is_deleted = result
+            if prev_d_id is None:
+                prev_d_id = d_id
+                final_amt = d_amt
+
+            if prev_d_id != d_id:
+                if not math.isclose(final_amt, 0):
+                    final_amts.append((prev_d_id, final_amt))
+                prev_d_id = d_id
+                final_amt = d_amt
+
+            if confirmed_at is not None and not is_deleted:
+                final_amt -= p_amt
+
+            if i >= len(results) - 1:
+                if not math.isclose(final_amt, 0):
+                    final_amts.append((prev_d_id, final_amt))
+
+        return final_amts
 
     def get_debts(self, bill_id):
         try:
@@ -673,7 +740,8 @@ class Transaction:
                 SELECT a.id, a.debt_amt,
                     a.debtor_id, u1.first_name, u1.last_name, u1.username,
                     a.creditor_id, u2.first_name, u2.last_name, u2.username,
-                    p.amount, p.created_at, p.confirmed_at
+                    p.amount, p.created_at, p.confirmed_at,
+                    COALESCE(p.is_deleted, FALSE)
                 FROM
                     (
                         SELECT d.id, d.debtor_id, d.creditor_id,
@@ -686,7 +754,6 @@ class Transaction:
                 INNER JOIN users u1 ON u1.id = a.debtor_id
                 INNER JOIN users u2 ON u2.id = a.creditor_id
                 LEFT JOIN payments p ON p.debt_id = a.id
-                WHERE NOT COALESCE(p.is_deleted, FALSE)
                 ORDER BY a.creditor_id, a.debtor_id
             """, (bill_id,)
             )
