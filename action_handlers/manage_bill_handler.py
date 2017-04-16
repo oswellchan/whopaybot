@@ -189,11 +189,11 @@ class DisplayManageBillKB(Action):
     def get_manage_bill_keyboard(bill_id, trans):
         bill_name, __, __, __ = trans.get_bill_gen_info(bill_id)
         share_btn = InlineKeyboardButton(
-            text="Share Bill",
+            text="📮 Share Bill",
             switch_inline_query=bill_name
         )
         refresh_btn = InlineKeyboardButton(
-            text="Refresh Bill",
+            text="🔄 Refresh Bill",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_REFRESH_BILL,
@@ -201,7 +201,7 @@ class DisplayManageBillKB(Action):
             )
         )
         share_items = InlineKeyboardButton(
-            text="Add yourself to Item(s)",
+            text="🙋 Add yourself to Item(s)",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_GET_SHARE_ITEMS_KB,
@@ -209,7 +209,7 @@ class DisplayManageBillKB(Action):
             )
         )
         calc_bill_btn = InlineKeyboardButton(
-            text="Calculate Split",
+            text="⚖ Calculate Split",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_CALCULATE_SPLIT,
@@ -244,17 +244,19 @@ class DisplayShareItemsKB(Action):
         __, owner_id, __, closed_at = trans.get_bill_gen_info(bill_id)
         if owner_id == user_id:
             return DisplayShareItemsKB.get_share_items_admin_keyboard(
-                bill_id, trans
+                bill_id, trans, user_id
             )
         else:
-            return DisplayShareItemsKB.get_share_items_keyboard(bill_id, trans)
+            return DisplayShareItemsKB.get_share_items_keyboard(
+            bill_id, trans, user_id
+            )
 
     @staticmethod
-    def get_share_items_keyboard(bill_id, trans):
+    def get_share_items_keyboard(bill_id, trans, user_id):
         keyboard = []
         items = trans.get_bill_items(bill_id)
         refresh_btn = InlineKeyboardButton(
-            text='Refresh',
+            text='🔄 Refresh',
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_REFRESH_BILL,
@@ -263,8 +265,12 @@ class DisplayShareItemsKB(Action):
         )
         keyboard.append([refresh_btn])
         for item_id, item_name, __ in items:
+            if trans.has_bill_share(bill_id, item_id, user_id):
+                text="👋 Unshare " + item_name
+            else:
+                text='☝️ Share ' + item_name
             item_btn = InlineKeyboardButton(
-                text=item_name,
+                text=text,
                 callback_data=utils.get_action_callback_data(
                     MODULE_ACTION_TYPE,
                     ACTION_SHARE_BILL_ITEM,
@@ -273,8 +279,16 @@ class DisplayShareItemsKB(Action):
                 )
             )
             keyboard.append([item_btn])
+
+
+        text="🙅 Unshare all items"
+        for item_id, item_name, __ in items:
+            if not trans.has_bill_share(bill_id, item_id, user_id):
+                text='🙌 Share all items'
+                break
+
         share_all_btn = InlineKeyboardButton(
-            text='Share all items',
+            text=text,
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_SHARE_ALL_ITEMS,
@@ -286,12 +300,16 @@ class DisplayShareItemsKB(Action):
         return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
-    def get_share_items_admin_keyboard(bill_id, trans):
+    def get_share_items_admin_keyboard(bill_id, trans, user_id):
         keyboard = []
         items = trans.get_bill_items(bill_id)
         for item_id, item_name, __ in items:
+            if trans.has_bill_share(bill_id, item_id, user_id):
+                text="👋 Unshare " + item_name
+            else:
+                text='☝️ Share ' + item_name
             item_btn = InlineKeyboardButton(
-                text=item_name,
+                text=text,
                 callback_data=utils.get_action_callback_data(
                     MODULE_ACTION_TYPE,
                     ACTION_SHARE_BILL_ITEM,
@@ -300,8 +318,15 @@ class DisplayShareItemsKB(Action):
                 )
             )
             keyboard.append([item_btn])
+
+        text="🙅 Unshare all items"
+        for item_id, item_name, __ in items:
+            if not trans.has_bill_share(bill_id, item_id, user_id):
+                text='🙌 Share all items'
+                break
+
         share_all_btn = InlineKeyboardButton(
-            text='Share all items',
+            text=text,
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_SHARE_ALL_ITEMS,
@@ -310,7 +335,7 @@ class DisplayShareItemsKB(Action):
         )
         keyboard.append([share_all_btn])
         back_btn = InlineKeyboardButton(
-            text='Back',
+            text='🔙 Back',
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_GET_MANAGE_BILL_KB,
@@ -351,7 +376,7 @@ class DisplayPayItemsKB(Action):
         keyboard = []
         keyboard.extend(DisplayPayItemsKB.get_payment_buttons(bill_id, trans))
         refresh_btn = InlineKeyboardButton(
-            text='Refresh',
+            text='🔄 Refresh',
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_REFRESH_BILL,
@@ -366,7 +391,7 @@ class DisplayPayItemsKB(Action):
         keyboard = []
         keyboard.extend(DisplayPayItemsKB.get_payment_buttons(bill_id, trans))
         back_btn = InlineKeyboardButton(
-            text='Back',
+            text='🔙 Back',
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_GET_MANAGE_BILL_KB,
@@ -386,7 +411,7 @@ class DisplayPayItemsKB(Action):
         for debt in debts:
             credtr = debt['creditor']
             pay_btn = InlineKeyboardButton(
-                text='Pay ' + utils.format_name(
+                text='💸 Pay ' + utils.format_name(
                     credtr[3], credtr[1], credtr[2]
                 ),
                 callback_data=utils.get_action_callback_data(
@@ -719,7 +744,7 @@ class DisplayConfirmPaymentsKB(Action):
         kb = []
         for payment in pending:
             btn = InlineKeyboardButton(
-                text='{}  {}{:.4f}'.format(
+                text='✅ {}  {}{:.4f}'.format(
                     utils.format_name(payment[4], payment[2], payment[3]),
                     const.EMOJI_MONEY_BAG,
                     payment[1],
@@ -734,7 +759,7 @@ class DisplayConfirmPaymentsKB(Action):
             kb.append([btn])
 
         back_btn = InlineKeyboardButton(
-            text="Back",
+            text="🔙 Back",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_REFRESH_BILL,
@@ -816,11 +841,11 @@ class SendDebtsBillAdmin(Action):
     def get_debts_bill_msg(bill_id, trans):
         bill_name, __, __, __ = trans.get_bill_gen_info(bill_id)
         share_btn = InlineKeyboardButton(
-            text="Share Bill",
+            text="📮 Share Bill",
             switch_inline_query=bill_name
         )
         refresh_btn = InlineKeyboardButton(
-            text="Refresh Bill",
+            text="🔄 Refresh Bill",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_REFRESH_BILL,
@@ -828,7 +853,7 @@ class SendDebtsBillAdmin(Action):
             )
         )
         confirm_btn = InlineKeyboardButton(
-            text="Confirm Payments",
+            text="🤑 Confirm Payments",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_GET_CONFIRM_PAYMENTS_KB,

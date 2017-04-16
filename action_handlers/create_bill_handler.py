@@ -241,7 +241,7 @@ class DisplayNewBillKB(Action):
     @staticmethod
     def get_new_bill_keyboard(bill_id):
         modify_items_btn = InlineKeyboardButton(
-            text="Add/Edit Items",
+            text="📝 Add/Edit Items",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_GET_MODIFY_ITEMS_KB,
@@ -249,7 +249,7 @@ class DisplayNewBillKB(Action):
             )
         )
         modify_taxes_btn = InlineKeyboardButton(
-            text="Add/Edit Taxes",
+            text="💸 Add/Edit Taxes",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_GET_MODIFY_TAXES_KB,
@@ -257,7 +257,7 @@ class DisplayNewBillKB(Action):
             )
         )
         done_btn = InlineKeyboardButton(
-            text="Done",
+            text="👍 Done",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_CREATE_BILL_DONE,
@@ -288,7 +288,7 @@ class DisplayModifyItemsKB(Action):
     @staticmethod
     def get_modify_items_keyboard(bill_id):
         add_item_btn = InlineKeyboardButton(
-            text="Add item(s)",
+            text="➕ Add item(s)",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_ADD_ITEMS,
@@ -296,7 +296,7 @@ class DisplayModifyItemsKB(Action):
             )
         )
         edit_item_btn = InlineKeyboardButton(
-            text="Edit item",
+            text="🔃 Edit item",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_GET_EDIT_ITEM_KB,
@@ -304,7 +304,7 @@ class DisplayModifyItemsKB(Action):
             )
         )
         del_item_btn = InlineKeyboardButton(
-            text="Delete item",
+            text="➖ Delete item",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_GET_DELETE_ITEM_KB,
@@ -312,7 +312,7 @@ class DisplayModifyItemsKB(Action):
             )
         )
         back_btn = InlineKeyboardButton(
-            text="Back",
+            text="🔙 Back",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_GET_NEW_BILL_KB,
@@ -344,7 +344,7 @@ class DisplayModifyTaxesKB(Action):
     @staticmethod
     def get_modify_taxes_keyboard(bill_id):
         add_tax_btn = InlineKeyboardButton(
-            text="Add tax",
+            text="➕ Add tax",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_ADD_TAX,
@@ -352,7 +352,7 @@ class DisplayModifyTaxesKB(Action):
             )
         )
         edit_tax_btn = InlineKeyboardButton(
-            text="Edit tax",
+            text="🔃 Edit tax",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_GET_EDIT_TAX_KB,
@@ -360,7 +360,7 @@ class DisplayModifyTaxesKB(Action):
             )
         )
         del_tax_btn = InlineKeyboardButton(
-            text="Delete tax",
+            text="➖ Delete tax",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_GET_DELETE_TAX_KB,
@@ -368,7 +368,7 @@ class DisplayModifyTaxesKB(Action):
             )
         )
         back_btn = InlineKeyboardButton(
-            text="Back",
+            text="🔙 Back",
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_GET_NEW_BILL_KB,
