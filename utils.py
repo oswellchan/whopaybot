@@ -180,10 +180,13 @@ def calculate_remaining_debt(bill_id, trans):
         pay_amt = debt[10]
         created_at = debt[11]
         confirmed_at = debt[12]
-        if confirmed_at is not None:
-            debtor['amt'] -= pay_amt
-        else:
-            is_pending = is_pending or (created_at is not None)
+        is_deleted = debt[13]
+
+        if not is_deleted:
+            if confirmed_at is not None:
+                debtor['amt'] -= pay_amt
+            else:
+                is_pending = is_pending or (created_at is not None)
 
         if i >= len(debts) - 1:
             if is_pending:
