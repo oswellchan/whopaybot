@@ -2,6 +2,7 @@ from action_handlers.action_handler import ActionHandler, Action
 from telegram import InlineQueryResultArticle, InputTextMessageContent
 from telegram.inlinekeyboardmarkup import InlineKeyboardMarkup
 from telegram.inlinekeyboardbutton import InlineKeyboardButton
+from settings import EnvSettings
 import constants as const
 import utils
 
@@ -151,7 +152,9 @@ def get_redirect_share_keyboard(bill_id):
     )
     inspect_btn = InlineKeyboardButton(
         text='Share items',
-        url='https://telegram.me/WhoPayBot?start=' + bill_id
+        url='https://telegram.me/{}?start={}'.format(
+            EnvSettings.APP_NAME, bill_id
+        )
     )
 
     return InlineKeyboardMarkup([
@@ -171,7 +174,9 @@ def get_redirect_pay_keyboard(bill_id):
     )
     inspect_btn = InlineKeyboardButton(
         text='Pay Debts',
-        url='https://telegram.me/WhoPayBot?start=' + bill_id
+        url='https://telegram.me/{}?start={}'.format(
+            EnvSettings.APP_NAME, bill_id
+        )
     )
 
     return InlineKeyboardMarkup([

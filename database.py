@@ -3,7 +3,6 @@ import uuid
 import json
 import utils
 import math
-import logging
 
 
 class Database:
