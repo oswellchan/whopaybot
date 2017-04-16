@@ -2,6 +2,7 @@ from action_handlers.action_handler import ActionHandler, Action
 from telegram.ext import Filters
 from telegram.inlinekeyboardmarkup import InlineKeyboardMarkup
 from telegram.inlinekeyboardbutton import InlineKeyboardButton
+from telegram.parsemode import ParseMode
 from telegram.error import BadRequest
 import constants as const
 import utils
@@ -28,8 +29,9 @@ ACTION_GET_PAY_ITEMS_KB = 13
 ACTION_PAY_DEBT = 14
 ACTION_GET_INSPECT_BILL_KB = 15
 
-REQUEST_CALC_SPLIT_CONFIRMATION = "You are about to calculate the splitting of the bill. Once this is done, no new person can be added to the bill anymore. Do you wish to continue? Reply 'yes' or 'no'."
+REQUEST_CALC_SPLIT_CONFIRMATION = "You are about to calculate the splitting of the bill. Once this is done, no new person can be added to the bill anymore. Do you wish to continue? Reply /yes or /no."
 ERROR_INVALID_CONFIRMATION = "Sorry, I could not understand the message. Reply 'yes' to continue or 'no' to cancel."
+REQUEST_PAY_CONFIRMATION = "You are about to confirm <b>{}'s</b> payment of {}{:.4f}. This action is irreversible. Do you wish to continue? Reply /yes or /no."
 YES_WITH_QUOTES = "'yes'"
 YES = 'yes'
 NO_WITH_QUOTES = "'no'"
@@ -67,6 +69,26 @@ class BillManagementHandler(ActionHandler):
             action = PayDebt()
 
         action.execute(bot, update, trans, subaction_id, data)
+
+    def execute_yes(self, bot, update, trans, action_id,
+                    subaction_id=0, data=None):
+        action = None
+        if action_id == ACTION_CONFIRM_BILL_PAYMENT:
+            action = ConfirmPayment()
+        if action_id == ACTION_CALCULATE_SPLIT:
+            action = CalculateBillSplit()
+
+        action.yes(bot, update, trans, subaction_id, data)
+
+    def execute_no(self, bot, update, trans, action_id,
+                   subaction_id=0, data=None):
+        action = None
+        if action_id == ACTION_CONFIRM_BILL_PAYMENT:
+            action = ConfirmPayment()
+        if action_id == ACTION_CALCULATE_SPLIT:
+            action = CalculateBillSplit()
+
+        action.no(bot, update, trans, subaction_id, data)
 
 
 class SendBill(Action):
@@ -543,6 +565,16 @@ class CalculateBillSplit(Action):
         if subaction_id == self.ACTION_PROCESS_SPLIT_BILL:
             return self.process_split_bill(bot, update, trans, data)
 
+    def yes(self, bot, update, trans, subaction_id, data=None):
+        return self.split_bill(bot, update, trans, data)
+
+    def no(self, bot, update, trans, subaction_id, data=None):
+        msg = update.message
+        bill_id = data.get(const.JSON_BILL_ID)
+        return self.send_manage_bill(
+            bot, bill_id, msg.chat_id, msg.from_user.id, trans
+        )
+
     def send_confirmation(self, bot, cbq, bill_id, trans):
         self.set_session(
             cbq.message.chat_id,
@@ -558,35 +590,6 @@ class CalculateBillSplit(Action):
             chat_id=cbq.message.chat_id,
             text=REQUEST_CALC_SPLIT_CONFIRMATION
         )
-
-    def process_split_bill(self, bot, update, trans, data):
-        msg = update.message
-        if not Filters.text.filter(msg):
-            return bot.sendMessage(
-                chat_id=msg.chat_id,
-                text=ERROR_INVALID_CONFIRMATION
-            )
-
-        text = msg.text
-        try:
-            if (text.lower() == YES_WITH_QUOTES or
-                    text.lower() == YES):
-                return self.split_bill(bot, update, trans, data)
-            if (text.lower() == NO_WITH_QUOTES or
-                    text.lower() == NO):
-                bill_id = data.get(const.JSON_BILL_ID)
-                if bill_id is None:
-                    raise Exception('bill_id not saved in session')
-                return self.send_manage_bill(
-                    bot, bill_id, msg.chat_id, msg.from_user.id, trans
-                )
-
-            return bot.sendMessage(
-                chat_id=msg.chat_id,
-                text=ERROR_INVALID_CONFIRMATION
-            )
-        except Exception as e:
-            logging.exception('process_split_bill')
 
     def send_manage_bill(self, bot, bill_id, chat_id, user_id, trans):
         text, pm = utils.get_complete_bill_text(bill_id, trans)
@@ -637,7 +640,7 @@ class CalculateBillSplit(Action):
                     bill['owner_id'],
                     debtor_id,
                     auto_confirm=auto_confirm,
-                    is_deleted=True
+                    is_deleted=is_deleted
                 )
             return SendDebtsBillAdmin().execute(bot, update, trans, data=data)
         except Exception as e:
@@ -865,27 +868,62 @@ class PayDebt(Action):
 
 
 class ConfirmPayment(Action):
-    ACTION_CONFIRM_PAYMENT = 0
+    ACTION_REQUEST_CONFIRMATION = 0
 
     def __init__(self):
         super().__init__(MODULE_ACTION_TYPE, ACTION_CONFIRM_BILL_PAYMENT)
 
     def execute(self, bot, update, trans, subaction_id=0, data=None):
-        if subaction_id == self.ACTION_CONFIRM_PAYMENT:
+        if subaction_id == self.ACTION_REQUEST_CONFIRMATION:
+            cbq = update.callback_query
             bill_id = data.get(const.JSON_BILL_ID)
             payment_id = data.get(const.JSON_PAYMENT_ID)
-            self.confirm_payment(
-                bot, bill_id, payment_id, update.callback_query, trans
-            )
+            return self.send_confirmation(bot, cbq, bill_id, payment_id, trans)
 
-    def confirm_payment(self, bot, bill_id, payment_id, cbq, trans):
+    def send_confirmation(self, bot, cbq, bill_id, payment_id, trans):
+        self.set_session(
+            cbq.message.chat_id,
+            cbq.from_user,
+            self.action_type,
+            self.action_id,
+            0,
+            trans,
+            data={const.JSON_BILL_ID: bill_id,
+                  const.JSON_PAYMENT_ID: payment_id}
+        )
+        amt, fname, lname, uname = trans.get_payment(payment_id)
+        cbq.answer()
+        bot.sendMessage(
+            chat_id=cbq.message.chat_id,
+            text=REQUEST_PAY_CONFIRMATION.format(
+                utils.escape_html(
+                    utils.format_name(uname, fname, lname)
+                ),
+                const.EMOJI_MONEY_BAG,
+                amt
+            ),
+            parse_mode=ParseMode.HTML
+        )
+
+    def yes(self, bot, update, trans, subaction_id, data=None):
+        bill_id = data.get(const.JSON_BILL_ID)
+        payment_id = data.get(const.JSON_PAYMENT_ID)
+        self.confirm_payment(
+            bot, bill_id, payment_id, update.message, trans
+        )
+
+    def no(self, bot, update, trans, subaction_id, data=None):
+        return SendDebtsBill().execute(bot, update, trans, 0, data)
+
+    def confirm_payment(self, bot, bill_id, payment_id, msg, trans):
         trans.confirm_payment(payment_id)
         text, pm = utils.get_debts_bill_text(bill_id, trans)
         kb = DisplayConfirmPaymentsKB.get_confirm_payments_keyboard(
-            bill_id, cbq.from_user.id, trans
+            bill_id, msg.from_user.id, trans
         )
-        cbq.answer()
-        cbq.edit_message_text(
+        trans.reset_session(msg.from_user.id, msg.chat_id)
+        bot.sendMessage(
+            chat_id=msg.chat_id,
             text=text,
             parse_mode=pm,
             reply_markup=kb

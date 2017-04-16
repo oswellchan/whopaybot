@@ -38,6 +38,10 @@ class TelegramBot:
         dispatcher.add_handler(newbill_handler)
         done_handler = CommandHandler('done', self.done)
         dispatcher.add_handler(done_handler)
+        yes_handler = CommandHandler('yes', self.yes)
+        dispatcher.add_handler(yes_handler)
+        no_handler = CommandHandler('no', self.no)
+        dispatcher.add_handler(no_handler)
 
         # Handle callback queries
         callback_handler = CallbackQueryHandler(self.handle_all_callback)
@@ -108,6 +112,54 @@ class TelegramBot:
                 )
         except Exception as e:
             logging.exception('done')
+
+    @run_async
+    def yes(self, bot, update):
+        try:
+            conn = self.db.get_connection()
+            with Transaction(conn) as trans:
+                msg = update.message
+                user = msg.from_user
+                trans.add_user(
+                    user.id,
+                    user.first_name,
+                    user.last_name,
+                    user.username
+                )
+                act_type, act_id, subact_id, data = trans.get_session(
+                    msg.chat_id,
+                    msg.from_user.id,
+                )
+                handler = self.get_action_handler(act_type)
+                return handler.execute_yes(
+                    bot, update, trans, act_id, subact_id, data
+                )
+        except Exception as e:
+            logging.exception('yes')
+
+    @run_async
+    def no(self, bot, update):
+        try:
+            conn = self.db.get_connection()
+            with Transaction(conn) as trans:
+                msg = update.message
+                user = msg.from_user
+                trans.add_user(
+                    user.id,
+                    user.first_name,
+                    user.last_name,
+                    user.username
+                )
+                act_type, act_id, subact_id, data = trans.get_session(
+                    msg.chat_id,
+                    msg.from_user.id,
+                )
+                handler = self.get_action_handler(act_type)
+                return handler.execute_no(
+                    bot, update, trans, act_id, subact_id, data
+                )
+        except Exception as e:
+            logging.exception('no')
 
     @run_async
     def handle_all_msg(self, bot, update):

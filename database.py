@@ -783,6 +783,26 @@ class Transaction:
             self.is_error = True
             raise e
 
+    def get_payment(self, payment_id):
+        try:
+            self.cursor.execute("""\
+                SELECT p.amount, u.first_name, u.last_name, u.username
+                FROM payments p
+                INNER JOIN debts d ON d.id = p.debt_id
+                INNER JOIN users u ON u.id = d.debtor_id
+                WHERE p.id = %s
+            """, (payment_id,)
+            )
+
+            results = self.cursor.fetchall()
+            if len(results) != 1:
+                raise Exception("Less or more than 1 result found")
+
+            return results[0]
+        except Exception as e:
+            self.is_error = True
+            raise e
+
     def confirm_payment(self, payment_id):
         try:
             self.cursor.execute("""\
