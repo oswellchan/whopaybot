@@ -143,7 +143,7 @@ class RefreshShareBill(Action):
 
 def get_redirect_share_keyboard(bill_id):
     refresh_btn = InlineKeyboardButton(
-        text='Refresh',
+        text='🔄 Refresh',
         callback_data=utils.get_action_callback_data(
             MODULE_ACTION_TYPE,
             ACTION_REFRESH_SHARE_BILL,
@@ -151,7 +151,7 @@ def get_redirect_share_keyboard(bill_id):
         )
     )
     inspect_btn = InlineKeyboardButton(
-        text='Share items',
+        text='📮 Share items',
         url='https://telegram.me/{}?start={}'.format(
             EnvSettings.APP_NAME, bill_id
         )
@@ -165,7 +165,7 @@ def get_redirect_share_keyboard(bill_id):
 
 def get_redirect_pay_keyboard(bill_id):
     refresh_btn = InlineKeyboardButton(
-        text='Refresh',
+        text='🔄 Refresh',
         callback_data=utils.get_action_callback_data(
             MODULE_ACTION_TYPE,
             ACTION_REFRESH_SHARE_BILL,
@@ -173,7 +173,7 @@ def get_redirect_pay_keyboard(bill_id):
         )
     )
     inspect_btn = InlineKeyboardButton(
-        text='Pay Debts',
+        text='💸 Pay Debts',
         url='https://telegram.me/{}?start={}'.format(
             EnvSettings.APP_NAME, bill_id
         )

@@ -368,15 +368,19 @@ class DisplayPayItemsKB(Action):
         __, owner_id, __, closed_at = trans.get_bill_gen_info(bill_id)
         if owner_id == user_id:
             return DisplayPayItemsKB.get_pay_items_admin_keyboard(
-                bill_id, trans
+                bill_id, user_id, trans
             )
         else:
-            return DisplayPayItemsKB.get_pay_items_keyboard(bill_id, trans)
+            return DisplayPayItemsKB.get_pay_items_keyboard(
+                bill_id, user_id, trans
+            )
 
     @staticmethod
-    def get_pay_items_keyboard(self, bill_id, trans):
+    def get_pay_items_keyboard(self, bill_id, user_id, trans):
         keyboard = []
-        keyboard.extend(DisplayPayItemsKB.get_payment_buttons(bill_id, trans))
+        keyboard.extend(DisplayPayItemsKB.get_payment_buttons(
+            bill_id, user_id, trans
+        ))
         refresh_btn = InlineKeyboardButton(
             text='🔄 Refresh',
             callback_data=utils.get_action_callback_data(
@@ -389,9 +393,11 @@ class DisplayPayItemsKB(Action):
         return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
-    def get_pay_items_admin_keyboard(bill_id, trans):
+    def get_pay_items_admin_keyboard(bill_id, user_id, trans):
         keyboard = []
-        keyboard.extend(DisplayPayItemsKB.get_payment_buttons(bill_id, trans))
+        keyboard.extend(DisplayPayItemsKB.get_payment_buttons(
+            bill_id, user_id, trans
+        ))
         back_btn = InlineKeyboardButton(
             text='🔙 Back',
             callback_data=utils.get_action_callback_data(
@@ -404,16 +410,23 @@ class DisplayPayItemsKB(Action):
         return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
-    def get_payment_buttons(bill_id, trans, debts=None):
+    def get_payment_buttons(bill_id, user_id, trans, debts=None):
         kb = []
         if debts is None:
             debts, __ = utils.calculate_remaining_debt(
                 bill_id, trans
             )
         for debt in debts:
+            text = '💸 Pay '
+            for debtor in debt['debtors']:
+                if (debtor['debtor'][0] == user_id and
+                        debtor['status'] == '(Pending)'):
+                    text = '💰 Unpay '
+                    break
+
             credtr = debt['creditor']
             pay_btn = InlineKeyboardButton(
-                text='💸 Pay ' + utils.format_name(
+                text=text + utils.format_name(
                     credtr[3], credtr[1], credtr[2]
                 ),
                 callback_data=utils.get_action_callback_data(
@@ -450,7 +463,7 @@ class ShareBillItem(Action):
                     bill_id, debts, unique_users, trans
                 )
                 btns = DisplayPayItemsKB.get_payment_buttons(
-                    bill_id, trans, debts=debts
+                    bill_id, cbq.from_user.id, trans, debts=debts
                 )
                 kb = InlineKeyboardMarkup(btns)
                 cbq.answer()
@@ -501,7 +514,7 @@ class ShareAllItems(Action):
                     bill_id, debts, unique_users, trans
                 )
                 btns = DisplayPayItemsKB.get_payment_buttons(
-                    bill_id, trans, debts=debts
+                    bill_id, cbq.from_user.id, trans, debts=debts
                 )
                 kb = InlineKeyboardMarkup(btns)
                 cbq.answer()
@@ -824,7 +837,9 @@ class SendDebtsBill(Action):
         text, pm = utils.format_debts_bill_text(
             bill_id, debts, unique_users, trans
         )
-        kb = DisplayPayItemsKB.get_payment_buttons(bill_id, trans, debts=debts)
+        kb = DisplayPayItemsKB.get_payment_buttons(
+            bill_id, user_id, trans, debts=debts
+        )
         return text, pm, InlineKeyboardMarkup(kb)
 
 
