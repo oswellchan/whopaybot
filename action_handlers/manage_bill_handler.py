@@ -9,6 +9,8 @@ import utils
 import datetime
 import logging
 import counter
+import math
+import random
 
 MODULE_ACTION_TYPE = const.TYPE_MANAGE_BILL
 
@@ -31,7 +33,7 @@ ACTION_GET_INSPECT_BILL_KB = 15
 
 REQUEST_CALC_SPLIT_CONFIRMATION = "You are about to calculate the splitting of the bill. Once this is done, no new person can be added to the bill anymore. Do you wish to continue? Reply /yes or /no."
 ERROR_INVALID_CONFIRMATION = "Sorry, I could not understand the message. Reply 'yes' to continue or 'no' to cancel."
-REQUEST_PAY_CONFIRMATION = "You are about to confirm <b>{}'s</b> payment of {}{:.4f}. This action is irreversible. Do you wish to continue? Reply /yes or /no."
+REQUEST_PAY_CONFIRMATION = "You are about to confirm <b>{}'s</b> payment of {}{:.2f}. This action is irreversible. Do you wish to continue? Reply /yes or /no."
 YES_WITH_QUOTES = "'yes'"
 YES = 'yes'
 NO_WITH_QUOTES = "'no'"
@@ -647,12 +649,23 @@ class CalculateBillSplit(Action):
                         item_sharers.append(u_id)
                 if len(item_sharers) == 0:
                     continue
-                debt = price * tax_amt / len(item_sharers)
-                for sharer in item_sharers:
+
+                num_sharers = len(item_sharers)
+                # convert to cents
+                item_amount = math.floor(price * tax_amt * 100)
+                debt = item_amount // num_sharers
+                remainder = item_amount % num_sharers
+
+                # get random users to get remainder
+                selected = random.sample(range(num_sharers), remainder)
+                for i, sharer in enumerate(item_sharers):
+                    amt_to_pay = debt
+                    if i in selected:
+                        amt_to_pay += 1
                     if debtors.get(sharer) is None:
-                        debtors[sharer] = debt
+                        debtors[sharer] = amt_to_pay / 100
                     else:
-                        debtors[sharer] += debt
+                        debtors[sharer] += amt_to_pay / 100
 
             trans.add_debtors(bill_id, bill['owner_id'], debtors)
             trans.close_bill(bill_id)
@@ -744,7 +757,7 @@ class DisplayConfirmPaymentsKB(Action):
         kb = []
         for payment in pending:
             btn = InlineKeyboardButton(
-                text='✅ {}  {}{:.4f}'.format(
+                text='✅ {}  {}{:.2f}'.format(
                     utils.format_name(payment[4], payment[2], payment[3]),
                     const.EMOJI_MONEY_BAG,
                     payment[1],
