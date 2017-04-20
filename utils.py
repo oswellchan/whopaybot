@@ -97,7 +97,7 @@ def format_debts_bill_text(bill_id, debts, unique_users, trans):
                     debts_text.append('No debts')
                 for i, debtor in enumerate(debt['debtors']):
                     __, fname, lname, uname = debtor['debtor']
-                    debt_row = '{}. {}\n{}{:.4f}/{:.4f} {}'.format(
+                    debt_row = '{}. {}\n{}{:.2f} / {:.2f} {}'.format(
                         str(i + 1),
                         format_name(uname, fname, lname),
                         const.EMOJI_MONEY_BAG,
