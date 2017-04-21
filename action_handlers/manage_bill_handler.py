@@ -139,9 +139,13 @@ class SendCompleteBill(Action):
         kb = None
         __, owner_id, __, is_closed = trans.get_bill_gen_info(bill_id)
         if user_id == owner_id:
-            kb = DisplayManageBillKB.get_manage_bill_keyboard(bill_id, trans)
+            kb = DisplayManageBillKB.get_manage_bill_keyboard(
+                bill_id, trans
+            )
         else:
-            kb = DisplayShareItemsKB.get_share_items_keyboard(bill_id, trans)
+            kb = DisplayShareItemsKB.get_share_items_keyboard(
+                bill_id, trans, user_id
+            )
         return text, pm, kb
 
     def send_bill_response(self, bot, cbq, bill_id, trans):
@@ -250,7 +254,7 @@ class DisplayShareItemsKB(Action):
             )
         else:
             return DisplayShareItemsKB.get_share_items_keyboard(
-            bill_id, trans, user_id
+                bill_id, trans, user_id
             )
 
     @staticmethod
