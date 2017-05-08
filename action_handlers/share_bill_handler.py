@@ -39,11 +39,12 @@ class FindBills(Action):
 
     def find_bills(self, bot, iq, trans):
         query = iq.query
-        if not query:
-            return
         bill_ids = trans.get_bill_details_by_name(query, iq.from_user.id)
         results = []
-        for bill_id, closed_at in bill_ids:
+        for i, details in enumerate(bill_ids):
+            if i > 10:
+                break
+            bill_id, closed_at = details
             result = None
             if closed_at is None:
                 result = self.get_sharing_bill_result(bill_id, trans)

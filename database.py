@@ -195,6 +195,8 @@ class Transaction:
             raise e
 
     def get_bill_details_by_name(self, bill_name, user_id):
+        if len(bill_name) == 0:
+            return self.get_all_bill_details(user_id)
         try:
             self.cursor.execute("""\
                 SELECT b.id, b.closed_at FROM bills b
@@ -207,8 +209,31 @@ class Transaction:
                         AND bs.user_id = %s
                         AND NOT bs.is_deleted
                      )
-                );
+                )
+                ORDER BY b.created_at DESC;
                 """, (bill_name, user_id, user_id)
+            )
+            return self.cursor.fetchall()
+
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def get_all_bill_details(self, user_id):
+        try:
+            self.cursor.execute("""\
+                SELECT b.id, b.closed_at FROM bills b
+                WHERE b.completed_at IS NOT NULL
+                AND (b.owner_id = %s
+                     OR EXISTS(
+                        SELECT * FROM bill_shares bs
+                        WHERE bs.bill_id = b.id
+                        AND bs.user_id = %s
+                        AND NOT bs.is_deleted
+                     )
+                )
+                ORDER BY b.created_at DESC;
+                """, (user_id, user_id)
             )
             return self.cursor.fetchall()
 
