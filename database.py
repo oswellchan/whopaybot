@@ -646,12 +646,13 @@ class Transaction:
 
             pending = self.get_pending_payments(bill_id, creditor_id)
             if len(pending) > 0:
-                for pid, __, __, __, __ in pending:
-                    self.cursor.execute("""\
-                        UPDATE payments SET is_deleted = TRUE
-                        WHERE id = %s
-                    """, (pid,))
-                return
+                for pid, __, uid, __, __, __ in pending:
+                    if uid == debtor_id:
+                        self.cursor.execute("""\
+                            UPDATE payments SET is_deleted = TRUE
+                            WHERE id = %s
+                        """, (pid,))
+                        return
 
             # get deleted payments
             self.cursor.execute("""\
@@ -785,7 +786,7 @@ class Transaction:
     def get_pending_payments(self, bill_id, creditor_id):
         try:
             self.cursor.execute("""\
-                SELECT p.id, p.amount, u.first_name, u.last_name, u.username
+                SELECT p.id, p.amount, u.id, u.first_name, u.last_name, u.username
                 FROM payments p
                 INNER JOIN debts d ON d.id = p.debt_id
                 INNER JOIN users u ON u.id = d.debtor_id

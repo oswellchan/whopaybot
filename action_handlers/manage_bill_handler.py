@@ -775,7 +775,7 @@ class DisplayConfirmPaymentsKB(Action):
         for payment in pending:
             btn = InlineKeyboardButton(
                 text='✅ {}  {}{:.2f}'.format(
-                    utils.format_name(payment[4], payment[2], payment[3]),
+                    utils.format_name(payment[5], payment[3], payment[4]),
                     const.EMOJI_MONEY_BAG,
                     payment[1],
                 ),
