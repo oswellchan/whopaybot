@@ -1,6 +1,7 @@
 from telegram.ext import Updater, Filters
 from telegram.ext import CommandHandler, MessageHandler, CallbackQueryHandler, InlineQueryHandler
 from telegram.ext.dispatcher import run_async
+from telegram.parsemode import ParseMode
 from database import Transaction
 from action_handlers import create_bill_handler, manage_bill_handler, share_bill_handler
 import json
@@ -34,6 +35,8 @@ class TelegramBot:
         # Command handlers
         start_handler = CommandHandler('start', self.start, pass_args=True)
         dispatcher.add_handler(start_handler)
+        help_handler = CommandHandler('help', self.help)
+        dispatcher.add_handler(help_handler)
         newbill_handler = CommandHandler('newbill', self.new_bill)
         dispatcher.add_handler(newbill_handler)
         done_handler = CommandHandler('done', self.done)
@@ -71,7 +74,11 @@ class TelegramBot:
                     data=data
                 )
             return
-        bot.sendMessage(chat_id=update.message.chat_id, text="Start screen")
+        self.send_help_msg(bot, update)
+
+    @run_async
+    def help(self, bot, update):
+        self.send_help_msg(bot, update)
 
     @run_async
     def new_bill(self, bot, update):
@@ -256,6 +263,21 @@ class TelegramBot:
             return share_bill_handler.BillShareHandler()
 
         raise Exception("Action type '{}' unknown".format(action_type))
+
+    def send_help_msg(self, bot, update):
+        help_msg = ("Hi I'm here to help you create and manage your bills.\n\n"
+        "You can control me by sending these commands: \n\n"
+        "/newbill - Create a new bill \n\n"
+        "Retrieve or share your bills by typing\n"
+        "@WhoPayBot <i>bill name</i>\n"
+        "in any chat.\n"
+        "Alternatively, search for your bills by typing just "
+        "@WhoPayBot or @WhoPayBot followed by part of the bill name.")
+        bot.sendMessage(
+            chat_id=update.message.chat_id,
+            text=help_msg,
+            parse_mode=ParseMode.HTML
+        )
 
 
 class BillError(Exception):
