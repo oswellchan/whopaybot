@@ -1,5 +1,4 @@
 from action_handlers.action_handler import ActionHandler, Action
-from telegram.ext import Filters
 from telegram.inlinekeyboardmarkup import InlineKeyboardMarkup
 from telegram.inlinekeyboardbutton import InlineKeyboardButton
 from telegram.parsemode import ParseMode
@@ -30,10 +29,13 @@ ACTION_GET_SHARE_ITEMS_KB = 12
 ACTION_GET_PAY_ITEMS_KB = 13
 ACTION_PAY_DEBT = 14
 ACTION_GET_INSPECT_BILL_KB = 15
+ACTION_GET_FORCE_CONFIRM_PAYMENTS_KB = 16
+ACTION_FORCE_CONFIRM_PAYMENT = 17
 
 REQUEST_CALC_SPLIT_CONFIRMATION = "You are about to calculate the splitting of the bill. Once this is done, no new person can be added to the bill anymore. Do you wish to continue? Reply /yes or /no."
 ERROR_INVALID_CONFIRMATION = "Sorry, I could not understand the message. Reply 'yes' to continue or 'no' to cancel."
 REQUEST_PAY_CONFIRMATION = "You are about to confirm <b>{}'s</b> payment of {}{:.2f}. This action is irreversible. Do you wish to continue? Reply /yes or /no."
+REQUEST_FORCE_PAY_CONFIRMATION = "You are about to forcibly confirm <b>{}'s</b> payment of {}{:.2f}. This person has not indicated payment yet. This action is irreversible. Do you wish to continue? Reply /yes or /no."
 YES_WITH_QUOTES = "'yes'"
 YES = 'yes'
 NO_WITH_QUOTES = "'no'"
@@ -69,6 +71,10 @@ class BillManagementHandler(ActionHandler):
             action = DisplayShareItemsKB()
         if action_id == ACTION_PAY_DEBT:
             action = PayDebt()
+        if action_id == ACTION_FORCE_CONFIRM_PAYMENT:
+            action = ForceConfirmPayment()
+        if action_id == ACTION_GET_FORCE_CONFIRM_PAYMENTS_KB:
+            action = DisplayForceConfirmPaymentsKB()
 
         action.execute(bot, update, trans, subaction_id, data)
 
@@ -79,6 +85,8 @@ class BillManagementHandler(ActionHandler):
             action = ConfirmPayment()
         if action_id == ACTION_CALCULATE_SPLIT:
             action = CalculateBillSplit()
+        if action_id == ACTION_FORCE_CONFIRM_PAYMENT:
+            action = ForceConfirmPayment()
 
         action.yes(bot, update, trans, subaction_id, data)
 
@@ -89,6 +97,8 @@ class BillManagementHandler(ActionHandler):
             action = ConfirmPayment()
         if action_id == ACTION_CALCULATE_SPLIT:
             action = CalculateBillSplit()
+        if action_id == ACTION_FORCE_CONFIRM_PAYMENT:
+            action = ForceConfirmPayment()
 
         action.no(bot, update, trans, subaction_id, data)
 
@@ -800,6 +810,59 @@ class DisplayConfirmPaymentsKB(Action):
         return InlineKeyboardMarkup(kb)
 
 
+class DisplayForceConfirmPaymentsKB(Action):
+    ACTION_DISPLAY_PAYMENTS_KB = 0
+
+    def __init__(self):
+        super().__init__(
+            MODULE_ACTION_TYPE,
+            ACTION_GET_FORCE_CONFIRM_PAYMENTS_KB
+        )
+
+    def execute(self, bot, update, trans, subaction_id, data=None):
+        if subaction_id == self.ACTION_DISPLAY_PAYMENTS_KB:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            creditor_id = cbq.from_user.id
+            return cbq.edit_message_reply_markup(
+                reply_markup=self.get_force_confirm_payments_keyboard(
+                    bill_id, creditor_id, trans
+                )
+            )
+
+    @staticmethod
+    def get_force_confirm_payments_keyboard(bill_id, creditor_id, trans):
+        unpaid = trans.get_unpaid_payments(bill_id, creditor_id)
+
+        kb = []
+        for payment in unpaid:
+            btn = InlineKeyboardButton(
+                text='✅ {}  {}{:.2f}'.format(
+                    utils.format_name(payment[5], payment[3], payment[4]),
+                    const.EMOJI_MONEY_BAG,
+                    payment[1],
+                ),
+                callback_data=utils.get_action_callback_data(
+                    MODULE_ACTION_TYPE,
+                    ACTION_FORCE_CONFIRM_PAYMENT,
+                    {const.JSON_BILL_ID: bill_id,
+                     const.JSON_PAYMENT_ID: payment[0]}
+                )
+            )
+            kb.append([btn])
+
+        back_btn = InlineKeyboardButton(
+            text="🔙 Back",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_REFRESH_BILL,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
+        kb.append([back_btn])
+        return InlineKeyboardMarkup(kb)
+
+
 class SendDebtsBill(Action):
     ACTION_SEND_DEBTS_BILL = 0
 
@@ -892,10 +955,19 @@ class SendDebtsBillAdmin(Action):
                 {const.JSON_BILL_ID: bill_id}
             )
         )
+        f_confirm_btn = InlineKeyboardButton(
+            text="😵 Force Confirm Payments",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_GET_FORCE_CONFIRM_PAYMENTS_KB,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
         kb = InlineKeyboardMarkup(
             [[share_btn],
              [refresh_btn],
-             [confirm_btn]]
+             [confirm_btn],
+             [f_confirm_btn]]
         )
         text, pm = utils.get_debts_bill_text(bill_id, trans)
         return text, pm, kb
@@ -976,6 +1048,69 @@ class ConfirmPayment(Action):
         trans.confirm_payment(payment_id)
         text, pm = utils.get_debts_bill_text(bill_id, trans)
         kb = DisplayConfirmPaymentsKB.get_confirm_payments_keyboard(
+            bill_id, msg.from_user.id, trans
+        )
+        trans.reset_session(msg.from_user.id, msg.chat_id)
+        bot.sendMessage(
+            chat_id=msg.chat_id,
+            text=text,
+            parse_mode=pm,
+            reply_markup=kb
+        )
+
+
+class ForceConfirmPayment(Action):
+    ACTION_REQUEST_CONFIRMATION = 0
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_FORCE_CONFIRM_PAYMENT)
+
+    def execute(self, bot, update, trans, subaction_id=0, data=None):
+        if subaction_id == self.ACTION_REQUEST_CONFIRMATION:
+            cbq = update.callback_query
+            bill_id = data.get(const.JSON_BILL_ID)
+            payment_id = data.get(const.JSON_PAYMENT_ID)
+            return self.send_confirmation(bot, cbq, bill_id, payment_id, trans)
+
+    def send_confirmation(self, bot, cbq, bill_id, payment_id, trans):
+        self.set_session(
+            cbq.message.chat_id,
+            cbq.from_user,
+            self.action_type,
+            self.action_id,
+            0,
+            trans,
+            data={const.JSON_BILL_ID: bill_id,
+                  const.JSON_PAYMENT_ID: payment_id}
+        )
+        amt, fname, lname, uname = trans.get_payment(payment_id)
+        cbq.answer()
+        bot.sendMessage(
+            chat_id=cbq.message.chat_id,
+            text=REQUEST_FORCE_PAY_CONFIRMATION.format(
+                utils.escape_html(
+                    utils.format_name(uname, fname, lname)
+                ),
+                const.EMOJI_MONEY_BAG,
+                amt
+            ),
+            parse_mode=ParseMode.HTML
+        )
+
+    def yes(self, bot, update, trans, subaction_id, data=None):
+        bill_id = data.get(const.JSON_BILL_ID)
+        payment_id = data.get(const.JSON_PAYMENT_ID)
+        self.force_confirm_payment(
+            bot, bill_id, payment_id, update.message, trans
+        )
+
+    def no(self, bot, update, trans, subaction_id, data=None):
+        return SendDebtsBill().execute(bot, update, trans, 0, data)
+
+    def force_confirm_payment(self, bot, bill_id, payment_id, msg, trans):
+        trans.force_confirm_payment(payment_id)
+        text, pm = utils.get_debts_bill_text(bill_id, trans)
+        kb = DisplayForceConfirmPaymentsKB.get_force_confirm_payments_keyboard(
             bill_id, msg.from_user.id, trans
         )
         trans.reset_session(msg.from_user.id, msg.chat_id)

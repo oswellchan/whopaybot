@@ -829,6 +829,27 @@ class Transaction:
             self.is_error = True
             raise e
 
+    def get_unpaid_payments(self, bill_id, creditor_id):
+        try:
+            self.cursor.execute("""\
+                SELECT p.id, p.amount, u.id, u.first_name, u.last_name, u.username
+                FROM payments p
+                INNER JOIN debts d ON d.id = p.debt_id
+                INNER JOIN users u ON u.id = d.debtor_id
+                WHERE d.bill_id = %s
+                AND d.creditor_id = %s
+                AND d.is_deleted = FALSE
+                AND p.is_deleted = TRUE
+                AND p.confirmed_at IS NULL
+                FOR UPDATE;
+            """, (bill_id, creditor_id)
+            )
+
+            return self.cursor.fetchall()
+        except Exception as e:
+            self.is_error = True
+            raise e
+
     def get_payment(self, payment_id):
         try:
             self.cursor.execute("""\
@@ -853,6 +874,21 @@ class Transaction:
         try:
             self.cursor.execute("""\
                 UPDATE payments SET confirmed_at = NOW()
+                WHERE id = %s
+                RETURNING id
+            """, (payment_id,)
+            )
+            rows = self.cursor.fetchall()
+            if len(rows) != 1:
+                raise Exception('Less or more than 1 confirmed')
+        except Exception as e:
+            self.is_error = True
+            raise e
+
+    def force_confirm_payment(self, payment_id):
+        try:
+            self.cursor.execute("""\
+                UPDATE payments SET is_deleted = FALSE, confirmed_at = NOW()
                 WHERE id = %s
                 RETURNING id
             """, (payment_id,)
