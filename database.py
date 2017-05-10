@@ -50,16 +50,36 @@ class Transaction:
 
         self.cursor.execute("COMMIT;")
 
-    def add_user(self, user_id, first_name, last_name, username):
+    def add_user(self, user_id, first_name, last_name,
+                 username, is_ignore_id=False):
         try:
+            if is_ignore_id:
+                self.cursor.execute("""\
+                    SELECT u.id FROM users u
+                    ORDER BY id ASC
+                    LIMIT 1
+                    FOR UPDATE;
+                """)
+                last_uid = self.cursor.fetchone()[0]
+                if last_uid > 0:
+                    user_id = -1
+                else:
+                    user_id = last_uid - 1
+
             self.cursor.execute("""\
                 INSERT INTO users (id, first_name, last_name, username)
                     VALUES(%s, %s, %s, %s)
                 ON CONFLICT(id) DO UPDATE SET
                     id=EXCLUDED.id, first_name=EXCLUDED.first_name,
-                    last_name=EXCLUDED.last_name, username=EXCLUDED.username;
+                    last_name=EXCLUDED.last_name, username=EXCLUDED.username
+                RETURNING id;
             """, (user_id, first_name, last_name, username)
             )
+
+            rows = self.cursor.fetchall()
+            if len(rows) != 1:
+                raise Exception('User not added')
+            return rows[0][0]
         except Exception as e:
             self.is_error = True
             raise e
@@ -305,7 +325,6 @@ class Transaction:
             )
             return self.cursor.fetchall()
         except Exception as e:
-            utils.print_error()
             self.is_error = True
             raise e
 
@@ -319,7 +338,19 @@ class Transaction:
             )
             return self.cursor.fetchone()
         except Exception as e:
-            utils.print_error()
+            self.is_error = True
+            raise e
+
+    def get_bill_id_of_item(self, item_id):
+        try:
+            self.cursor.execute("""\
+                SELECT i.bill_id
+                    FROM items i
+                WHERE i.id = %s
+            """, (item_id,)
+            )
+            return self.cursor.fetchone()[0]
+        except Exception as e:
             self.is_error = True
             raise e
 
@@ -787,7 +818,7 @@ class Transaction:
                     a.debtor_id, u1.first_name, u1.last_name, u1.username,
                     a.creditor_id, u2.first_name, u2.last_name, u2.username,
                     p.amount, p.created_at, p.confirmed_at,
-                    COALESCE(p.is_deleted, FALSE)
+                    COALESCE(p.is_deleted, FALSE), p.is_forced
                 FROM
                     (
                         SELECT d.id, d.debtor_id, d.creditor_id,
@@ -888,7 +919,8 @@ class Transaction:
     def force_confirm_payment(self, payment_id):
         try:
             self.cursor.execute("""\
-                UPDATE payments SET is_deleted = FALSE, confirmed_at = NOW()
+                UPDATE payments SET is_deleted = FALSE, confirmed_at = NOW(),
+                is_forced = TRUE
                 WHERE id = %s
                 RETURNING id
             """, (payment_id,)

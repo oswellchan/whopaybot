@@ -8,7 +8,7 @@ import logging
 def get_action_callback_data(action_type, action_id, data):
     data[const.JSON_ACTION_TYPE] = action_type
     data[const.JSON_ACTION_ID] = action_id
-    return json.dumps(data)
+    return json.dumps(data).replace(' ', '')
 
 
 def format_complete_bill_text(bill, bill_id, trans):
@@ -130,6 +130,7 @@ def calculate_remaining_debt(bill_id, trans):
     result = None
     debtor = None
     is_pending = False
+    is_forced = False
     for i, debt in enumerate(debts):
         unique_users.add(debt[2])
         creditor = (debt[6], debt[7], debt[8], debt[9])
@@ -163,11 +164,15 @@ def calculate_remaining_debt(bill_id, trans):
                 debtor['status'] = '(Pending)'
             elif math.isclose(debtor['amt'], 0):
                 debtor['amt'] = 0
-                debtor['status'] = '(Paid)'
+                if is_forced:
+                    debtor['status'] = '<b>(Paid)</b>'
+                else:
+                    debtor['status'] = '(Paid)'
             result['debtors'].append(debtor)
 
             # Reset debtor info with new info
             is_pending = False
+            is_forced = False
             debtor = {
                 'debtor': (debt[2], debt[3], debt[4], debt[5]),
                 'debt_id': debt_id,
@@ -181,6 +186,7 @@ def calculate_remaining_debt(bill_id, trans):
         created_at = debt[11]
         confirmed_at = debt[12]
         is_deleted = debt[13]
+        is_forced = debt[14]
 
         if not is_deleted:
             if confirmed_at is not None:
@@ -193,7 +199,10 @@ def calculate_remaining_debt(bill_id, trans):
                 debtor['status'] = '(Pending)'
             elif math.isclose(debtor['amt'], 0):
                 debtor['amt'] = 0
-                debtor['status'] = '(Paid)'
+                if is_forced:
+                    debtor['status'] = '<b>(Paid)</b>'
+                else:
+                    debtor['status'] = '(Paid)'
             result['debtors'].append(debtor)
             results.append(result)
 

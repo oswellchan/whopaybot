@@ -7,6 +7,7 @@ JSON_ACTION_ID = 'ai'
 JSON_BILL_ID = 'b'
 JSON_ITEM_ID = 'i'
 JSON_TAX_ID = 't'
+JSON_USER_ID = 'u'
 JSON_CREDITOR_ID = 'c'
 JSON_PAYMENT_ID = 'p'
 

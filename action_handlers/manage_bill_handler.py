@@ -1,6 +1,7 @@
 from action_handlers.action_handler import ActionHandler, Action
 from telegram.inlinekeyboardmarkup import InlineKeyboardMarkup
 from telegram.inlinekeyboardbutton import InlineKeyboardButton
+from telegram.ext import Filters
 from telegram.parsemode import ParseMode
 from telegram.error import BadRequest
 import constants as const
@@ -31,11 +32,13 @@ ACTION_PAY_DEBT = 14
 ACTION_GET_INSPECT_BILL_KB = 15
 ACTION_GET_FORCE_CONFIRM_PAYMENTS_KB = 16
 ACTION_FORCE_CONFIRM_PAYMENT = 17
+ACTION_ADD_SOMEONE = 18
 
 REQUEST_CALC_SPLIT_CONFIRMATION = "You are about to calculate the splitting of the bill. Once this is done, no new person can be added to the bill anymore. Do you wish to continue? Reply /yes or /no."
-ERROR_INVALID_CONFIRMATION = "Sorry, I could not understand the message. Reply 'yes' to continue or 'no' to cancel."
+ERROR_INVALID_CONTACT = "Sorry, invalid Contact or name sent. Name can only be 250 characters long. Please try again."
 REQUEST_PAY_CONFIRMATION = "You are about to confirm <b>{}'s</b> payment of {}{:.2f}. This action is irreversible. Do you wish to continue? Reply /yes or /no."
 REQUEST_FORCE_PAY_CONFIRMATION = "You are about to forcibly confirm <b>{}'s</b> payment of {}{:.2f}. This person has not indicated payment yet. This action is irreversible. Do you wish to continue? Reply /yes or /no."
+REQUEST_CONTACT = "Please send me the <b>Contact</b> or name of the person. However, this person might <b>not</b> be able to indicate payment for this bill later on. You will have to force confirm his/her payment. To stop this, reply /no."
 YES_WITH_QUOTES = "'yes'"
 YES = 'yes'
 NO_WITH_QUOTES = "'no'"
@@ -75,6 +78,8 @@ class BillManagementHandler(ActionHandler):
             action = ForceConfirmPayment()
         if action_id == ACTION_GET_FORCE_CONFIRM_PAYMENTS_KB:
             action = DisplayForceConfirmPaymentsKB()
+        if action_id == ACTION_ADD_SOMEONE:
+            action = AddSomeone()
 
         action.execute(bot, update, trans, subaction_id, data)
 
@@ -99,6 +104,8 @@ class BillManagementHandler(ActionHandler):
             action = CalculateBillSplit()
         if action_id == ACTION_FORCE_CONFIRM_PAYMENT:
             action = ForceConfirmPayment()
+        if action_id == ACTION_ADD_SOMEONE:
+            action = AddSomeone()
 
         action.no(bot, update, trans, subaction_id, data)
 
@@ -164,7 +171,7 @@ class SendCompleteBill(Action):
             text, pm, kb = self.get_appropriate_response(
                 bill_id, cbq.from_user.id, trans
             )
-            trans.reset_session(cbq.from_user.id, chat_id)
+            trans.reset_session(chat_id, cbq.from_user.id)
             cbq.answer()
             cbq.edit_message_text(
                 text=text,
@@ -205,7 +212,7 @@ class DisplayManageBillKB(Action):
     def get_manage_bill_keyboard(bill_id, trans):
         bill_name, __, __, __ = trans.get_bill_gen_info(bill_id)
         share_btn = InlineKeyboardButton(
-            text="📮 Share Bill",
+            text="📮 Share Bill for Collaboration",
             switch_inline_query=bill_name
         )
         refresh_btn = InlineKeyboardButton(
@@ -224,6 +231,14 @@ class DisplayManageBillKB(Action):
                 {const.JSON_BILL_ID: bill_id}
             )
         )
+        share_else_items = InlineKeyboardButton(
+            text="💁 Add someone to Item(s)",
+            callback_data=utils.get_action_callback_data(
+                MODULE_ACTION_TYPE,
+                ACTION_ADD_SOMEONE,
+                {const.JSON_BILL_ID: bill_id}
+            )
+        )
         calc_bill_btn = InlineKeyboardButton(
             text="⚖ Calculate Split",
             callback_data=utils.get_action_callback_data(
@@ -236,6 +251,7 @@ class DisplayManageBillKB(Action):
             [[share_btn],
              [refresh_btn],
              [share_items],
+             [share_else_items],
              [calc_bill_btn]]
         )
 
@@ -256,9 +272,11 @@ class DisplayShareItemsKB(Action):
             return cbq.edit_message_reply_markup(reply_markup=kb)
 
     @staticmethod
-    def get_appropriate_keyboard(bill_id, user_id, trans):
+    def get_appropriate_keyboard(bill_id, user_id, trans, proxy_uid=None):
+        if proxy_uid is None:
+            proxy_uid = user_id
         __, owner_id, __, closed_at = trans.get_bill_gen_info(bill_id)
-        if owner_id == user_id:
+        if owner_id == proxy_uid:
             return DisplayShareItemsKB.get_share_items_admin_keyboard(
                 bill_id, trans, user_id
             )
@@ -282,25 +300,24 @@ class DisplayShareItemsKB(Action):
         keyboard.append([refresh_btn])
         for item_id, item_name, __ in items:
             if trans.has_bill_share(bill_id, item_id, user_id):
-                text="👋 Unshare " + item_name
+                text = "👋 Unshare " + item_name
             else:
-                text='☝️ Share ' + item_name
+                text = '☝️ Share ' + item_name
             item_btn = InlineKeyboardButton(
                 text=text,
                 callback_data=utils.get_action_callback_data(
                     MODULE_ACTION_TYPE,
                     ACTION_SHARE_BILL_ITEM,
-                    {const.JSON_BILL_ID: bill_id,
-                     const.JSON_ITEM_ID: item_id}
+                    {const.JSON_ITEM_ID: item_id,
+                     const.JSON_USER_ID: user_id}
                 )
             )
             keyboard.append([item_btn])
 
-
-        text="🙅 Unshare all items"
+        text = "🙅 Unshare all items"
         for item_id, item_name, __ in items:
             if not trans.has_bill_share(bill_id, item_id, user_id):
-                text='🙌 Share all items'
+                text = '🙌 Share all items'
                 break
 
         share_all_btn = InlineKeyboardButton(
@@ -308,7 +325,8 @@ class DisplayShareItemsKB(Action):
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_SHARE_ALL_ITEMS,
-                {const.JSON_BILL_ID: bill_id}
+                {const.JSON_BILL_ID: bill_id,
+                 const.JSON_USER_ID: user_id}
             )
         )
         keyboard.append([share_all_btn])
@@ -321,24 +339,24 @@ class DisplayShareItemsKB(Action):
         items = trans.get_bill_items(bill_id)
         for item_id, item_name, __ in items:
             if trans.has_bill_share(bill_id, item_id, user_id):
-                text="👋 Unshare " + item_name
+                text = "👋 Unshare " + item_name
             else:
-                text='☝️ Share ' + item_name
+                text = '☝️ Share ' + item_name
             item_btn = InlineKeyboardButton(
                 text=text,
                 callback_data=utils.get_action_callback_data(
                     MODULE_ACTION_TYPE,
                     ACTION_SHARE_BILL_ITEM,
-                    {const.JSON_BILL_ID: bill_id,
-                     const.JSON_ITEM_ID: item_id}
+                    {const.JSON_ITEM_ID: item_id,
+                     const.JSON_USER_ID: user_id}
                 )
             )
             keyboard.append([item_btn])
 
-        text="🙅 Unshare all items"
+        text = "🙅 Unshare all items"
         for item_id, item_name, __ in items:
             if not trans.has_bill_share(bill_id, item_id, user_id):
-                text='🙌 Share all items'
+                text = '🙌 Share all items'
                 break
 
         share_all_btn = InlineKeyboardButton(
@@ -346,7 +364,8 @@ class DisplayShareItemsKB(Action):
             callback_data=utils.get_action_callback_data(
                 MODULE_ACTION_TYPE,
                 ACTION_SHARE_ALL_ITEMS,
-                {const.JSON_BILL_ID: bill_id}
+                {const.JSON_BILL_ID: bill_id,
+                 const.JSON_USER_ID: user_id}
             )
         )
         keyboard.append([share_all_btn])
@@ -465,8 +484,8 @@ class ShareBillItem(Action):
         if subaction_id == self.ACTION_SHARE_ITEM:
             print("3. Parsing: " + str(datetime.datetime.now().time()))
             cbq = update.callback_query
-            bill_id = data.get(const.JSON_BILL_ID)
             item_id = data.get(const.JSON_ITEM_ID)
+            bill_id = trans.get_bill_id_of_item(item_id)
 
             __, __, __, is_closed = trans.get_bill_gen_info(bill_id)
             if is_closed is not None:
@@ -487,17 +506,21 @@ class ShareBillItem(Action):
                     reply_markup=kb
                 )
 
-            self.share_bill_item(bot, cbq, bill_id, item_id, trans)
+            user_id = data.get(const.JSON_USER_ID)
+            if user_id is None:
+                raise Exception('Missing user_id')
+            self.share_bill_item(bot, cbq, bill_id, item_id, user_id, trans)
             print("7. Sent: " + str(datetime.datetime.now().time()))
             counter.Counter.remove_count()
 
-    def share_bill_item(self, bot, cbq, bill_id, item_id, trans):
+    @staticmethod
+    def share_bill_item(bot, cbq, bill_id, item_id, user_id, trans):
         print("4. Toggle share: " + str(datetime.datetime.now().time()))
-        trans.toggle_bill_share(bill_id, item_id, cbq.from_user.id)
+        trans.toggle_bill_share(bill_id, item_id, user_id)
         print("5. Toggled: " + str(datetime.datetime.now().time()))
         text, pm = utils.get_complete_bill_text(bill_id, trans)
         kb = DisplayShareItemsKB.get_appropriate_keyboard(
-            bill_id, cbq.from_user.id, trans
+            bill_id, user_id, trans, proxy_uid=cbq.from_user.id
         )
         print("6. Prepared: " + str(datetime.datetime.now().time()))
         cbq.edit_message_text(
@@ -538,17 +561,20 @@ class ShareAllItems(Action):
                     reply_markup=kb
                 )
 
-            self.share_all_items(bot, cbq, bill_id, trans)
+            user_id = data.get(const.JSON_USER_ID)
+            if user_id is None:
+                raise Exception('Missing user_id')
+            self.share_all_items(bot, cbq, bill_id, user_id, trans)
             print("7. Sent: " + str(datetime.datetime.now().time()))
             counter.Counter.remove_count()
 
-    def share_all_items(self, bot, cbq, bill_id, trans):
+    def share_all_items(self, bot, cbq, bill_id, user_id, trans):
         print("4. Toggle share: " + str(datetime.datetime.now().time()))
-        trans.toggle_all_bill_shares(bill_id, cbq.from_user.id)
+        trans.toggle_all_bill_shares(bill_id, user_id)
         print("5. Toggled: " + str(datetime.datetime.now().time()))
         text, pm = utils.get_complete_bill_text(bill_id, trans)
         kb = DisplayShareItemsKB.get_appropriate_keyboard(
-            bill_id, cbq.from_user.id, trans
+            bill_id, user_id, trans, proxy_uid=cbq.from_user.id
         )
         print("6. Prepared: " + str(datetime.datetime.now().time()))
         cbq.edit_message_text(
@@ -648,7 +674,7 @@ class CalculateBillSplit(Action):
     def send_manage_bill(self, bot, bill_id, chat_id, user_id, trans):
         text, pm = utils.get_complete_bill_text(bill_id, trans)
         keyboard = DisplayManageBillKB.get_manage_bill_keyboard(bill_id, trans)
-        trans.reset_session(user_id, chat_id)
+        trans.reset_session(chat_id, user_id)
         bot.sendMessage(
             chat_id=chat_id,
             text=text,
@@ -1050,7 +1076,7 @@ class ConfirmPayment(Action):
         kb = DisplayConfirmPaymentsKB.get_confirm_payments_keyboard(
             bill_id, msg.from_user.id, trans
         )
-        trans.reset_session(msg.from_user.id, msg.chat_id)
+        trans.reset_session(msg.chat_id, msg.from_user.id)
         bot.sendMessage(
             chat_id=msg.chat_id,
             text=text,
@@ -1113,13 +1139,109 @@ class ForceConfirmPayment(Action):
         kb = DisplayForceConfirmPaymentsKB.get_force_confirm_payments_keyboard(
             bill_id, msg.from_user.id, trans
         )
-        trans.reset_session(msg.from_user.id, msg.chat_id)
+        trans.reset_session(msg.chat_id, msg.from_user.id)
         bot.sendMessage(
             chat_id=msg.chat_id,
             text=text,
             parse_mode=pm,
             reply_markup=kb
         )
+
+
+class AddSomeone(Action):
+    ACTION_REQUEST_CONTACT = 0
+    ACTION_DISPLAY_ITEMS = 1
+
+    def __init__(self):
+        super().__init__(MODULE_ACTION_TYPE, ACTION_ADD_SOMEONE)
+
+    def execute(self, bot, update, trans, subaction_id=0, data=None):
+        has_rights, chat_id, text = evaluate_rights(update, trans, data)
+        if not has_rights:
+            if chat_id is not None:
+                if update.callback_query is not None:
+                    update.callback_query.answer()
+                return bot.sendMessage(
+                    chat_id=chat_id,
+                    text=text
+                )
+
+        bill_id = data.get(const.JSON_BILL_ID)
+        if subaction_id == self.ACTION_REQUEST_CONTACT:
+            cbq = update.callback_query
+            return self.request_contact(bot, cbq, bill_id, trans)
+        if subaction_id == self.ACTION_DISPLAY_ITEMS:
+            return self.send_items_list(bot, update.message, bill_id, trans)
+
+    def no(self, bot, update, trans, subaction_id, data=None):
+        return SendBill().execute(bot, update, trans, subaction_id, data)
+
+    def request_contact(self, bot, cbq, bill_id, trans):
+        self.set_session(
+            cbq.message.chat_id,
+            cbq.from_user,
+            self.action_type,
+            self.action_id,
+            self.ACTION_DISPLAY_ITEMS,
+            trans,
+            data={const.JSON_BILL_ID: bill_id}
+        )
+        cbq.answer()
+        bot.sendMessage(
+            chat_id=cbq.message.chat_id,
+            text=REQUEST_CONTACT,
+            parse_mode=ParseMode.HTML
+        )
+
+    def send_items_list(self, bot, msg, bill_id, trans):
+        try:
+            is_valid = False
+            user_id = 0
+            fname = None
+            lname = None
+            if Filters.contact.filter(msg):
+                is_valid = True
+                contact = msg.contact
+                if contact is None:
+                    raise Exception(ERROR_INVALID_CONTACT)
+                user_id = contact.user_id
+                fname = contact.first_name
+                lname = contact.last_name
+
+            if Filters.text.filter(msg):
+                is_valid = True
+                text = msg.text
+                if (text is None or len(text) < 1 or len(text) > 250):
+                    Exception(ERROR_INVALID_CONTACT)
+                fname = text
+
+            if not is_valid:
+                raise Exception(ERROR_INVALID_CONTACT)
+
+            user_id = trans.add_user(
+                user_id,
+                fname,
+                lname,
+                None,
+                is_ignore_id=(user_id == 0)
+            )
+
+            text, pm = utils.get_complete_bill_text(bill_id, trans)
+            kb = DisplayShareItemsKB.get_appropriate_keyboard(
+                bill_id, user_id, trans, proxy_uid=msg.from_user.id
+            )
+            bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=text,
+                parse_mode=pm,
+                reply_markup=kb
+            )
+            trans.reset_session(msg.chat_id, msg.from_user.id)
+        except Exception as e:
+            return bot.sendMessage(
+                chat_id=msg.chat_id,
+                text=str(e)
+            )
 
 
 def evaluate_rights(update, trans, data):

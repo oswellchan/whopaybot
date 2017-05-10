@@ -201,7 +201,7 @@ class CreateNewBill(Action):
                 )
 
             bill_id = trans.add_bill(text, msg.from_user.id)
-            trans.reset_session(msg.from_user.id, msg.chat_id)
+            trans.reset_session(msg.chat_id, msg.from_user.id)
             return send_bill_response(
                 bot,
                 msg.chat_id,
@@ -632,7 +632,7 @@ class AddItems(Action):
     def done(self, bot, update, trans, subaction_id, data=None):
         msg = update.message
         bill_id = data.get(const.JSON_BILL_ID)
-        trans.reset_session(msg.from_user.id, msg.chat_id)
+        trans.reset_session(msg.chat_id, msg.from_user.id)
         return send_bill_response(
             bot,
             msg.chat_id,
@@ -811,7 +811,7 @@ class EditItemName(Action):
             if item_id is None:
                 raise Exception('item_id is None')
             trans.edit_item_name(bill_id, item_id, msg.from_user.id, text)
-            trans.reset_session(msg.from_user.id, msg.chat_id)
+            trans.reset_session(msg.chat_id, msg.from_user.id)
             return send_bill_response(
                 bot,
                 msg.chat_id,
@@ -889,7 +889,7 @@ class EditItemPrice(Action):
             if item_id is None:
                 raise Exception('item_id is None')
             trans.edit_item_price(bill_id, item_id, msg.from_user.id, price)
-            trans.reset_session(msg.from_user.id, msg.chat_id)
+            trans.reset_session(msg.chat_id, msg.from_user.id)
             return send_bill_response(
                 bot,
                 msg.chat_id,
@@ -933,7 +933,7 @@ class DeleteItem(Action):
 
     def delete_item(self, bot, cbq, bill_id, item_id, trans):
         trans.delete_item(bill_id, item_id, cbq.from_user.id)
-        trans.reset_session(cbq.from_user.id, cbq.message.chat_id)
+        trans.reset_session(cbq.message.chat_id, cbq.from_user.id)
         return cbq.edit_message_text(
             text=get_bill_text(bill_id, cbq.from_user.id, trans),
             parse_mode=ParseMode.HTML,
@@ -966,7 +966,7 @@ class AddTax(Action):
     def done(self, bot, update, trans, subaction_id, data=None):
         msg = update.message
         bill_id = data.get(const.JSON_BILL_ID)
-        trans.reset_session(msg.from_user.id, msg.chat_id)
+        trans.reset_session(msg.chat_id, msg.from_user.id)
         return send_bill_response(
             bot,
             msg.chat_id,
@@ -1128,7 +1128,7 @@ class EditTaxName(Action):
             if tax_id is None:
                 raise Exception('tax_id is None')
             trans.edit_tax_name(bill_id, tax_id, msg.from_user.id, text)
-            trans.reset_session(msg.from_user.id, msg.chat_id)
+            trans.reset_session(msg.chat_id, msg.from_user.id)
             return send_bill_response(
                 bot,
                 msg.chat_id,
@@ -1206,7 +1206,7 @@ class EditTaxAmt(Action):
             if tax_id is None:
                 raise Exception('tax_id is None')
             trans.edit_tax_amt(bill_id, tax_id, msg.from_user.id, amt)
-            trans.reset_session(msg.from_user.id, msg.chat_id)
+            trans.reset_session(msg.chat_id, msg.from_user.id)
             return send_bill_response(
                 bot,
                 msg.chat_id,
@@ -1250,7 +1250,7 @@ class DeleteTax(Action):
 
     def delete_tax(self, bot, cbq, bill_id, tax_id, trans):
         trans.delete_tax(bill_id, tax_id, cbq.from_user.id)
-        trans.reset_session(cbq.from_user.id, cbq.message.chat_id)
+        trans.reset_session(cbq.message.chat_id, cbq.from_user.id)
         return cbq.edit_message_text(
             text=get_bill_text(bill_id, cbq.from_user.id, trans),
             parse_mode=ParseMode.HTML,

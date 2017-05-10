@@ -66,6 +66,8 @@ class TelegramBot:
             conn = self.db.get_connection()
             data = {const.JSON_BILL_ID: args[0]}
             with Transaction(conn) as trans:
+                msg = update.message
+                trans.reset_session(msg.chat_id, msg.from_user.id)
                 handler.execute(
                     bot,
                     update,

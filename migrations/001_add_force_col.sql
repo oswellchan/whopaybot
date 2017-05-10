@@ -1,0 +1,5 @@
+ALTER TABLE payments
+ADD is_forced BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE bill_shares
+ADD is_proxy BOOLEAN DEFAULT FALSE;

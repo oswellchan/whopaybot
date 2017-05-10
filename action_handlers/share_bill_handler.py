@@ -152,7 +152,7 @@ def get_redirect_share_keyboard(bill_id):
         )
     )
     inspect_btn = InlineKeyboardButton(
-        text='📮 Share items',
+        text='👉 Pick items',
         url='https://telegram.me/{}?start={}'.format(
             EnvSettings.APP_NAME, bill_id
         )
