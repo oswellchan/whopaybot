@@ -5,34 +5,13 @@ Telegram bot for bill splitting.
 This is a Telegram bot made using the [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot/) framework that makes splitting a bill between a group of people easier.
 
 ## Requirements
-1. Python 3.6+
-2. PostgreSQL 9.6+
+1. Docker
 
 ## Installing
 
 1. Clone repo to a local directory
-2. Install virtualenv:
-
-        $ pip install virtualenv
-
-3. Setup virtualenv
-
-        $ virtualenv venv
-
-    Or if you have multiple python installations
-
-       $ virtualenv -p /usr/bin/python3.6 venv
-
-4. Activate virtualenv
-
-        $ source venv/bin/activate
-
-5. Install dependencies
-
-        $ pip install -r requirements.txt
-
-6. Create PostgreSQL DB and run `schema.sql` to create the tables.
-7. Create .env file with necessary params
+2. Get your bot token and app name from [@BotFather](https://telegram.me/botfather)
+3. Create .env file in the root project directory with the following params:
 
         TOKEN=BOT_TOKEN
 
@@ -42,13 +21,13 @@ This is a Telegram bot made using the [python-telegram-bot](https://github.com/p
 
         # Local env settings
         DB_USER=DB_USERNAME
-        DB_NAME=DB_NAME
-        DB_HOST=DB_HOST
         DB_PASS=DB_PASSWORD
-        DB_PORT=DB_PORT
+4. Run `sh scripts/setup.sh`
+5. Done
 
-## Usage
+## Development
 
-Run the project bot using
-
-    $ python main.py
+There are a few scripts written to simplify development.
+1. `sh scripts/build.sh` - Rebuild the containers. Useful when you make changes to the environment
+2. `sh scripts/restart.sh` - Run this whenever you make a code change and see the changes in dev
+3. `sh scripts/logs.sh` - Run this to look at the dev logs in real time
