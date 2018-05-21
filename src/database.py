@@ -26,8 +26,8 @@ class Database:
 class Connection:
     def __init__(self, host, db, port, user, pw):
         conn = psycopg2.connect(
-            "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(
-                host, db, user, pw, port
+            "postgresql://{}:{}@{}:{}/{}".format(
+                user, pw, host, port, db
             )
         )
         conn.autocommit = True
