@@ -11,7 +11,7 @@ This is a Telegram bot made using the [python-telegram-bot](https://github.com/p
 
 1. Clone repo to a local directory
 2. Get your bot token and app name from [@BotFather](https://telegram.me/botfather)
-3. Create .env file in the root project directory with the following params:
+3. Create .env file in the root project directory with the following params: (Sample provided in .env.example)
 ```
 TOKEN=BOT_TOKEN
 
