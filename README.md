@@ -24,7 +24,8 @@ DB_USER=DB_USERNAME
 DB_PASS=DB_PASSWORD
 ```
 4. Run `sh scripts/setup.sh`
-5. Done
+5. Go to the bot on Telegram and run a few commands e.g. `/newbill`
+6. Done
 
 ## Development
 
