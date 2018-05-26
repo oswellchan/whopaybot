@@ -12,16 +12,17 @@ This is a Telegram bot made using the [python-telegram-bot](https://github.com/p
 1. Clone repo to a local directory
 2. Get your bot token and app name from [@BotFather](https://telegram.me/botfather)
 3. Create .env file in the root project directory with the following params:
+```
+TOKEN=BOT_TOKEN
 
-        TOKEN=BOT_TOKEN
+# Set IS_PROD to 0 for local and 1 for production
+IS_PROD=0
+APP_NAME=APP_NAME
 
-        # Set IS_PROD to 0 for local and 1 for production
-        IS_PROD=0
-        APP_NAME=APP_NAME
-
-        # Local env settings
-        DB_USER=DB_USERNAME
-        DB_PASS=DB_PASSWORD
+# Local env settings
+DB_USER=DB_USERNAME
+DB_PASS=DB_PASSWORD
+```
 4. Run `sh scripts/setup.sh`
 5. Done
 
