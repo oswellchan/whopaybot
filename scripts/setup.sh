@@ -9,7 +9,7 @@ if [ ! -f $DIR/../.env ]
     exit 1
 fi
 
-export $(egrep -v '^#' .env | xargs)
+export $(egrep -v '^#' $DIR/../.env | xargs)
 
 if [ -f $DIR/../web.env ]
   then
@@ -34,10 +34,38 @@ docker-compose up --build -d
 CONTAINER_ID=$(docker-compose ps -q db)
 CONTAINER_NAME=$(docker ps --format "{{.Names}}" -af "id=$CONTAINER_ID")
 
+echo "Checking status of db..."
+
+RETRY_COUNT=0
+while [  $RETRY_COUNT -lt 5 ]; do
+  {
+    output=$( PGPASSWORD=$POSTGRES_PASSWORD docker exec $CONTAINER_ID psql -h localhost --username=$POSTGRES_USER --dbname=whopay )
+  } || {
+    output="retry"
+  }
+  if [ "$output" = "" ]; then
+    echo "db up and running"
+    break
+  fi
+  if [ $RETRY_COUNT = 4 ]
+    then
+      echo "db has failed to run. Exiting..."
+    exit 1
+  fi
+  echo "Retrying in 5 seconds..."
+  sleep 5
+  let RETRY_COUNT=RETRY_COUNT+1
+done
+
+echo "Seeding db..."
+
 docker exec $CONTAINER_ID mkdir /migrations
 docker cp $DIR/../migrations $CONTAINER_NAME:/.
+
 for filepath in $DIR/../migrations/*.sql; do
   filename=$(basename $filepath)
   PGPASSWORD=$POSTGRES_PASSWORD docker exec $CONTAINER_ID psql -h localhost --username=$POSTGRES_USER --dbname=whopay -a -f /migrations/$filename > /dev/null 2>&1
 done
+
+echo "Done"
 
