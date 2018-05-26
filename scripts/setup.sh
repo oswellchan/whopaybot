@@ -16,17 +16,17 @@ if [ -f $DIR/../web.env ]
     rm -rf $DIR/../web.env
 fi
 cp $DIR/../.env $DIR/../web.env
-echo "DB_HOST=db" >> web.env
-echo "DB_NAME=whopay" >> web.env
-echo "DB_PORT=5432" >> web.env
+echo "DB_HOST=db" >> $DIR/../web.env
+echo "DB_NAME=whopay" >> $DIR/../web.env
+echo "DB_PORT=5432" >> $DIR/../web.env
 
 if [ -f $DIR/../db.env ]
   then
     rm -rf $DIR/../db.env
 fi
-echo "POSTGRES_USER=${DB_USER}" >> db.env
-echo "POSTGRES_PASSWORD=${DB_PASS}" >> db.env
-echo "POSTGRES_DB=whopay" >> db.env
+echo "POSTGRES_USER=${DB_USER}" >> $DIR/../db.env
+echo "POSTGRES_PASSWORD=${DB_PASS}" >> $DIR/../db.env
+echo "POSTGRES_DB=whopay" >> $DIR/../db.env
 
 docker-compose up --build -d
 
