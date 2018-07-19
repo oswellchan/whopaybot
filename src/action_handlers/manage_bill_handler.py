@@ -458,6 +458,14 @@ class DisplayPayItemsKB(Action):
                     break
 
             credtr = debt['creditor']
+            refresh_btn = InlineKeyboardButton(
+                text="🔄 Refresh Bill",
+                callback_data=utils.get_action_callback_data(
+                    MODULE_ACTION_TYPE,
+                    ACTION_REFRESH_BILL,
+                    {const.JSON_BILL_ID: bill_id}
+                )
+            )
             pay_btn = InlineKeyboardButton(
                 text=text + utils.format_name(
                     credtr[3], credtr[1], credtr[2]
@@ -469,6 +477,7 @@ class DisplayPayItemsKB(Action):
                      const.JSON_CREDITOR_ID: credtr[0]}
                 )
             )
+            kb.append([refresh_btn])
             kb.append([pay_btn])
 
         return kb
