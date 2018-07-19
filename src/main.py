@@ -5,11 +5,6 @@ import logging
 
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        level=logging.INFO,
-        filename='/logs/whopay.txt'
-    )
     try:
       settings = EnvSettings()
       db = Database(
@@ -26,3 +21,13 @@ if __name__ == '__main__':
                         settings.IS_PROD)
     except Exception as e:
         logging.exception()
+
+    logging_kwargs = {
+        'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        'level': logging.INFO
+    }
+
+    if not settings.IS_PROD:
+        logging_kwargs['filename'] = '/logs/whopay.txt'
+
+    logging.basicConfig(**logging_kwargs)
