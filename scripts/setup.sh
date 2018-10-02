@@ -39,7 +39,7 @@ echo "Checking status of db..."
 RETRY_COUNT=0
 while [  $RETRY_COUNT -lt 5 ]; do
   {
-    output=$( PGPASSWORD=$POSTGRES_PASSWORD docker exec $CONTAINER_ID psql -h localhost --username=$POSTGRES_USER --dbname=whopay )
+    output=$( PGPASSWORD=$DB_PASS docker exec $CONTAINER_ID psql -h localhost --username=$DB_USER --dbname=whopay )
   } || {
     output="retry"
   }
