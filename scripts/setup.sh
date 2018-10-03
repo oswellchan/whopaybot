@@ -64,7 +64,7 @@ docker cp $DIR/../migrations $CONTAINER_NAME:/.
 
 for filepath in $DIR/../migrations/*.sql; do
   filename=$(basename $filepath)
-  PGPASSWORD=$POSTGRES_PASSWORD docker exec $CONTAINER_ID psql -h localhost --username=$POSTGRES_USER --dbname=whopay -a -f /migrations/$filename > /dev/null 2>&1
+  PGPASSWORD=$DB_PASS docker exec $CONTAINER_ID psql -h localhost --username=$DB_USER --dbname=whopay -a -f /migrations/$filename > /dev/null 2>&1
 done
 
 echo "Done"
