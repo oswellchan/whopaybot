@@ -59,7 +59,7 @@ done
 
 echo "Seeding db..."
 
-docker exec $CONTAINER_ID mkdir /migrations
+docker exec $CONTAINER_ID mkdir -p /migrations
 docker cp $DIR/../migrations $CONTAINER_NAME:/.
 
 for filepath in $DIR/../migrations/*.sql; do
