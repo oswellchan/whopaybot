@@ -27,7 +27,4 @@ if __name__ == '__main__':
         'level': logging.INFO
     }
 
-    if not settings.IS_PROD:
-        logging_kwargs['filename'] = '/logs/whopay.txt'
-
     logging.basicConfig(**logging_kwargs)
