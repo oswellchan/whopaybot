@@ -34,6 +34,7 @@ ACTION_GET_FORCE_CONFIRM_PAYMENTS_KB = 16
 ACTION_FORCE_CONFIRM_PAYMENT = 17
 ACTION_ADD_SOMEONE = 18
 
+ERROR_ITEMS_NOT_SHARED = "The bill cannot be split because the following items are not shared:\n{}"
 REQUEST_CALC_SPLIT_CONFIRMATION = "You are about to calculate the splitting of the bill. Once this is done, no new person can be added to the bill anymore. Do you wish to continue? Reply /yes or /no."
 ERROR_INVALID_CONTACT = "Sorry, invalid Contact or name sent. Name can only be 250 characters long. Please try again."
 REQUEST_PAY_CONFIRMATION = "You are about to confirm <b>{}'s</b> payment of {}{:.2f}. This action is irreversible. Do you wish to continue? Reply /yes or /no."
@@ -650,18 +651,48 @@ class CalculateBillSplit(Action):
         if subaction_id == self.ACTION_REQUEST_CONFIRMATION:
             cbq = update.callback_query
             bill_id = data.get(const.JSON_BILL_ID)
+
+            unshared_items = self.get_unshared_items(bill_id, trans)
+
+            if len(unshared_items) > 0:
+                return self.reject_incomplete_bill(bot, cbq, unshared_items)
+
             return self.send_confirmation(bot, cbq, bill_id, trans)
-        if subaction_id == self.ACTION_PROCESS_SPLIT_BILL:
-            return self.process_split_bill(bot, update, trans, data)
 
     def yes(self, bot, update, trans, subaction_id, data=None):
-        return self.split_bill(bot, update, trans, data)
+        if subaction_id == self.ACTION_PROCESS_SPLIT_BILL:
+            return self.split_bill(bot, update, trans, data)
 
     def no(self, bot, update, trans, subaction_id, data=None):
-        msg = update.message
-        bill_id = data.get(const.JSON_BILL_ID)
-        return self.send_manage_bill(
-            bot, bill_id, msg.chat_id, msg.from_user.id, trans
+        if subaction_id == self.ACTION_PROCESS_SPLIT_BILL:
+            msg = update.message
+            bill_id = data.get(const.JSON_BILL_ID)
+            return self.send_manage_bill(
+                bot, bill_id, msg.chat_id, msg.from_user.id, trans
+            )
+
+    def get_unshared_items(self, bill_id, trans):
+        items = trans.get_bill_items(bill_id)
+        items_dict = {}
+        for idx, item in enumerate(items):
+            item_id, item_name, item_price = item
+            items_dict[item_id] = (idx, item_name, item_price)
+
+        sharers = trans.get_sharers(bill_id)
+        for item_id, __, __, __, __ in sharers:
+            del items_dict[item_id]
+
+        return items_dict.values()
+
+    def reject_incomplete_bill(self, bot, cbq, unshared_items):
+        formatted_items = [
+            '<i>{}. {}  {}{:.2f}</i>'.format(str(idx + 1), name, const.EMOJI_MONEY_BAG, price)
+            for idx, name, price in unshared_items
+        ]
+        bot.sendMessage(
+            chat_id=cbq.message.chat_id,
+            text=ERROR_ITEMS_NOT_SHARED.format('\n'.join(formatted_items)),
+            parse_mode=ParseMode.HTML
         )
 
     def send_confirmation(self, bot, cbq, bill_id, trans):

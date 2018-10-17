@@ -5,4 +5,4 @@ set -e
 CONTAINER_ID=$(docker-compose ps -q web)
 CONTAINER_NAME=$(docker ps --format "{{.Names}}" -af "id=$CONTAINER_ID")
 
-docker exec -it $CONTAINER_ID tail -f /logs/whopay.txt
+docker logs -f $CONTAINER_ID
