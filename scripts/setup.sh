@@ -1,6 +1,23 @@
 #!/bin/bash
 set -e
 
+DB_CONTAINER_NAME=whopay_db
+BOT_CONTAINER_NAME=whopay_bot
+
+{
+  docker inspect -f {{.State.Running}} $BOT_CONTAINER_NAME > /dev/null 2>&1
+} && {
+  echo "$BOT_CONTAINER_NAME container exists. Run nuke.sh to setup from a clean environment."
+  exit 1
+}
+
+{
+  docker inspect -f {{.State.Running}} $DB_CONTAINER_NAME > /dev/null 2>&1
+} && {
+  echo "$DB_CONTAINER_NAME container exists. Run nuke.sh to setup from a clean environment."
+  exit 1
+}
+
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 if [ ! -f $DIR/../.env ]
@@ -30,22 +47,20 @@ echo "POSTGRES_DB=whopay" >> $DIR/../db.env
 
 docker-compose up --build -d
 
-# Might break if other db services running?
-CONTAINER_ID=$(docker-compose ps -q db)
-CONTAINER_NAME=$(docker ps --format "{{.Names}}" -af "id=$CONTAINER_ID")
-
 echo "Checking status of db..."
+sleep 5
 
 RETRY_COUNT=0
 while [  $RETRY_COUNT -lt 5 ]; do
   {
-    output=$( PGPASSWORD=$DB_PASS docker exec $CONTAINER_ID psql -h localhost --username=$DB_USER --dbname=whopay )
+    output=$( PGPASSWORD=$DB_PASS docker exec $DB_CONTAINER_NAME psql -h localhost --username=$DB_USER --dbname=whopay )
   } || {
     output="retry"
   }
-  if [ "$output" = "" ]; then
-    echo "db up and running"
-    break
+  if [ "$output" = "" ]
+    then
+      echo "db up and running"
+      break
   fi
   if [ $RETRY_COUNT = 4 ]
     then
@@ -59,12 +74,12 @@ done
 
 echo "Seeding db..."
 
-docker exec $CONTAINER_ID mkdir /migrations
-docker cp $DIR/../migrations $CONTAINER_NAME:/.
+docker exec $DB_CONTAINER_NAME mkdir /migrations
+docker cp $DIR/../migrations $DB_CONTAINER_NAME:/.
 
 for filepath in $DIR/../migrations/*.sql; do
   filename=$(basename $filepath)
-  PGPASSWORD=$POSTGRES_PASSWORD docker exec $CONTAINER_ID psql -h localhost --username=$POSTGRES_USER --dbname=whopay -a -f /migrations/$filename > /dev/null 2>&1
+  PGPASSWORD=$POSTGRES_PASSWORD docker exec $DB_CONTAINER_NAME psql -h localhost --username=$POSTGRES_USER --dbname=whopay -a -f /migrations/$filename > /dev/null 2>&1
 done
 
 echo "Done"

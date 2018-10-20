@@ -29,7 +29,21 @@ DB_PASS=DB_PASSWORD
 
 ## Development
 
+### Scripts
 There are a few scripts written to simplify development.
-1. `sh scripts/build.sh` - Rebuild the containers. Useful when you make changes to the environment
-2. `sh scripts/restart.sh` - Run this whenever you make a code change and see the changes in dev
-3. `sh scripts/logs.sh` - Run this to look at the dev logs in real time
+1. `sh scripts/setup.sh` - To be run only on clean environment. Sets up dev environment
+2. `sh scripts/build.sh` - Rebuild the containers. Useful when you make changes to the environment or db schema
+3. `sh scripts/restart.sh` - Run this whenever you make a code change and see the changes in dev
+4. `sh scripts/logs.sh` - Run this to look at the dev logs in real time
+5. `sh scripts/nuke.sh` - Removes all relevant containers and images. Used to reset to a clean environment
+
+### DB Schema Changes
+If there are changes to the DB schema, add them to `migrations/` with the file name format of `XXX_change_description` where `XXX` is one more than the largest number in the `migrations` directory so far.
+
+## Contributing
+[Useful guide to good commit messages](https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html)
+> Capitalized, short (50 chars or less) summary
+> ...
+> Write your commit message in the imperative: "Fix bug" and not "Fixed bug"
+or "Fixes bug."  This convention matches up with commit messages generated
+by commands like git merge and git revert.
