@@ -680,7 +680,8 @@ class CalculateBillSplit(Action):
 
         sharers = trans.get_sharers(bill_id)
         for item_id, __, __, __, __ in sharers:
-            del items_dict[item_id]
+            if item_id in items_dict:
+                del items_dict[item_id]
 
         return items_dict.values()
 
