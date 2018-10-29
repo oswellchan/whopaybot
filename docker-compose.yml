@@ -3,11 +3,14 @@ version: '3'
 services:
   db:
     image: postgres
+    container_name: whopay_db
     env_file: db.env
     ports:
       - "5432:5432"
   web:
     build: .
+    container_name: whopay_bot
+    image: whopay_bot
     env_file: web.env
     command: python3 src/main.py
     volumes:
