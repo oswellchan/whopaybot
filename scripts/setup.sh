@@ -72,14 +72,14 @@ while [  $RETRY_COUNT -lt 5 ]; do
   let RETRY_COUNT=RETRY_COUNT+1
 done
 
-echo "Seeding db..."
+echo "Seeding db..."	
 
-docker exec $DB_CONTAINER_NAME mkdir /migrations
+docker exec $DB_CONTAINER_NAME mkdir -p /migrations
 docker cp $DIR/../migrations $DB_CONTAINER_NAME:/.
 
 for filepath in $DIR/../migrations/*.sql; do
   filename=$(basename $filepath)
-  PGPASSWORD=$POSTGRES_PASSWORD docker exec $DB_CONTAINER_NAME psql -h localhost --username=$POSTGRES_USER --dbname=whopay -a -f /migrations/$filename > /dev/null 2>&1
+  PGPASSWORD=$DB_PASS docker exec $DB_CONTAINER_NAME psql -h localhost --username=$DB_USER --dbname=whopay -a -f /migrations/$filename > /dev/null 2>&1
 done
 
 echo "Done"
